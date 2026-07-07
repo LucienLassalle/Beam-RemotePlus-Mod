@@ -1,8 +1,0 @@
-{
-  "title": "Beam-RemotePlus",
-  "tagid": "BeamRemotePlus",
-  "username": "LucienLassalle",
-  "version_string": "0.1.0-devel",
-  "tag_line": "Analog phone remote control, successor to the discontinued official app",
-  "message": "Beam-RemotePlus is the spiritual successor to BeamNG's official phone remote-control app, which was discontinued and no longer works (its telemetry call was left pointing at a deprecated, gutted function). This mod restores full functionality and goes further: real analog steering, throttle and brake (instead of the original's digital on/off pedals), plus live telemetry (speed, RPM, gear, fuel, engine temperature) read directly from the vehicle. Pairs with the companion 'Beam-RemotePlus' mobile app using the same QR code shown in Options > Controls > Hardware > Remote Control App - no extra setup required."
-}

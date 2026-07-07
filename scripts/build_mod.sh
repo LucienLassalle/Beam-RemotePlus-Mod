@@ -12,6 +12,6 @@ mkdir -p "$DIST_DIR"
 rm -f "$OUT_ZIP"
 
 cd "$SRC_DIR"
-zip -r -X "$OUT_ZIP" lua scripts settings mod_info >/dev/null
+zip -r -X "$OUT_ZIP" lua scripts settings >/dev/null
 
 echo "Mod compilé: $OUT_ZIP"
