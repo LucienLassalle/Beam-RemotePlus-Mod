@@ -1,0 +1,9 @@
+{
+  "name": "Beam-RemotePlus",
+  "notes": "Contrôleur virtuel créé par le mod Beam-RemotePlus pour l'app mobile du même nom : 3 axes analogiques (direction, accélération, frein), passthrough direct sans courbe de réponse pour une latence perçue minimale.",
+  "bindings": [
+    {"control": "xaxis", "action": "steering"},
+    {"control": "yaxis", "action": "accelerate"},
+    {"control": "zaxis", "action": "brake"}
+  ]
+}
