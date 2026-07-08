@@ -1,0 +1,10 @@
+{
+  "title": "Beam-RemotePlus",
+  "version_string": "1.1",
+  "tag_line": "Mobile remote control with rich telemetry and vehicle switching",
+  "username": "LucienLassalle",
+  "tagid": "BRNPLUS001",
+  "filename": "Beam-RemotePlus.zip",
+  "message": "Extension complementaire pour l'application mobile Beam-RemotePlus (successeur de BeamRemote).\n\nFonctionnalites :\n- Telemetrie fiable : RPM, vitesse, rapport engage, carburant, temperature\n- Pedales analogiques (throttle/frein progressifs)\n- Changement de vehicule depuis le telephone\n- Compatibilite complete avec le QR code natif (aucune configuration supplementaire)\n\nInstallation : deposer le ZIP dans le dossier mods/ de BeamNG.drive, puis activer depuis le gestionnaire de mods.",
+  "via": "local build"
+}
