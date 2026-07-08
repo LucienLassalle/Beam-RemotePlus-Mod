@@ -13,7 +13,7 @@
 -- La logique testable (sans dépendance à l'environnement BeamNG) vit dans
 -- protocol.lua ; voir Beam-RemotePlus-Mod/test/ pour les tests unitaires.
 
-local BUILD_TAG = 'devel-10'
+local BUILD_TAG = 'devel-11'
 local logTag = 'beamRemotePlus'
 
 -- require() met en cache par chemin (package.loaded), indépendamment du
@@ -104,11 +104,15 @@ local function handleCommand(ip, data)
   client.lastSeen = Engine.Platform.getSystemTimeMS()
 
   if data == protocol.CMD_NEXT_VEHICLE then
-    be:enterNextVehicle(0, 1)
-    log('I', logTag, 'next vehicle (from ' .. ip .. ')')
+    local player = assignedPlayers[client.deviceInst] or 0
+    extensions.core_input_vehicleSwitching.switchCycleVehicle(player, 1)
+    client.forcedEmit = true
+    log('I', logTag, 'next vehicle (player=' .. tostring(player) .. ', from ' .. ip .. ')')
   elseif data == protocol.CMD_PREV_VEHICLE then
-    be:enterNextVehicle(0, -1)
-    log('I', logTag, 'prev vehicle (from ' .. ip .. ')')
+    local player = assignedPlayers[client.deviceInst] or 0
+    extensions.core_input_vehicleSwitching.switchCycleVehicle(player, -1)
+    client.forcedEmit = true
+    log('I', logTag, 'prev vehicle (player=' .. tostring(player) .. ', from ' .. ip .. ')')
   elseif data == protocol.CMD_CAM_NEXT then
     local player = assignedPlayers[client.deviceInst] or 0
     if core_camera then
@@ -155,13 +159,19 @@ local function handleControl(ip, data)
   brake = protocol.clampUnit(brake)
   local state = client.state
 
-  if state[1] ~= steering then
+  -- Après un changement de véhicule, forcedEmit=true pour ré-émettre tous les
+  -- axes même si les valeurs n'ont pas changé. Sans ça, BeamNG garde keyboard0
+  -- en priorité car vinput0 n'a envoyé aucun événement récent sur le nouveau véhicule.
+  local forceEmit = client.forcedEmit
+  if forceEmit then client.forcedEmit = false end
+
+  if forceEmit or state[1] ~= steering then
     extensions.core_input_virtualInput.emit(client.deviceInst, 'axis', 0, 'change', steering)
   end
-  if state[2] ~= throttle then
+  if forceEmit or state[2] ~= throttle then
     extensions.core_input_virtualInput.emit(client.deviceInst, 'axis', 1, 'change', throttle)
   end
-  if state[3] ~= brake then
+  if forceEmit or state[3] ~= brake then
     extensions.core_input_virtualInput.emit(client.deviceInst, 'axis', 2, 'change', brake)
   end
   client.state = { steering, throttle, brake }
