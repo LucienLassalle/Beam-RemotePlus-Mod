@@ -177,6 +177,36 @@ t.describe('Paquet de contrôle (steering/throttle/brake)', function()
   end)
 end)
 
+t.describe('Commandes (cmd|)', function()
+  t.it('reconnaît un message cmd', function()
+    t.assertTrue(protocol.isCmdMessage('cmd|next_vehicle'))
+    t.assertTrue(protocol.isCmdMessage('cmd|prev_vehicle'))
+  end)
+
+  t.it('rejette un non-cmd', function()
+    t.assertFalse(protocol.isCmdMessage('beamng|next'))
+    t.assertFalse(protocol.isCmdMessage(''))
+    t.assertFalse(protocol.isCmdMessage(nil))
+  end)
+
+  t.it('les constantes CMD_NEXT et CMD_PREV sont correctement préfixées', function()
+    t.assertTrue(protocol.isCmdMessage(protocol.CMD_NEXT_VEHICLE))
+    t.assertTrue(protocol.isCmdMessage(protocol.CMD_PREV_VEHICLE))
+  end)
+
+  t.it('CMD_NEXT_VEHICLE vaut exactement cmd|next_vehicle', function()
+    t.assertEquals(protocol.CMD_NEXT_VEHICLE, 'cmd|next_vehicle')
+  end)
+
+  t.it('CMD_PREV_VEHICLE vaut exactement cmd|prev_vehicle', function()
+    t.assertEquals(protocol.CMD_PREV_VEHICLE, 'cmd|prev_vehicle')
+  end)
+
+  t.it('une commande connue n\'est pas aussi un ping', function()
+    t.assertFalse(protocol.isPingMessage(protocol.CMD_NEXT_VEHICLE))
+  end)
+end)
+
 t.describe('Paquet de télémétrie', function()
   t.it('encode 32 octets (8 floats)', function()
     local bytes = protocol.encodeTelemetryPacket(25, 3500, 7000, 2, 0.6, 88.5, 16, 1)
