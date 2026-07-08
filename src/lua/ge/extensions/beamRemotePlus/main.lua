@@ -13,7 +13,7 @@
 -- La logique testable (sans dépendance à l'environnement BeamNG) vit dans
 -- protocol.lua ; voir Beam-RemotePlus-Mod/test/ pour les tests unitaires.
 
-local BUILD_TAG = 'devel-9'
+local BUILD_TAG = 'devel-10'
 local logTag = 'beamRemotePlus'
 
 -- require() met en cache par chemin (package.loaded), indépendamment du
@@ -104,10 +104,10 @@ local function handleCommand(ip, data)
   client.lastSeen = Engine.Platform.getSystemTimeMS()
 
   if data == protocol.CMD_NEXT_VEHICLE then
-    be:nextVehicle()
+    be:enterNextVehicle(0, 1)
     log('I', logTag, 'next vehicle (from ' .. ip .. ')')
   elseif data == protocol.CMD_PREV_VEHICLE then
-    be:prevVehicle()
+    be:enterNextVehicle(0, -1)
     log('I', logTag, 'prev vehicle (from ' .. ip .. ')')
   elseif data == protocol.CMD_CAM_NEXT then
     local player = assignedPlayers[client.deviceInst] or 0
@@ -184,7 +184,7 @@ local function requestTelemetry(ip, client)
   -- attendu, y compris le bug %q corrigé ici).
   local ipLiteral = string.format('%q', ip)
   local vehicleCommand = [[
-    if electrics and electrics.values and electrics.values.watertemp then
+    if electrics and electrics.values then
       local e = electrics.values
       local lights = 0
       if e.lowbeam == 1 then lights = lights + 1 end
