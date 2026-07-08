@@ -219,12 +219,27 @@ t.describe('Commandes (cmd|)', function()
     t.assertTrue(protocol.isCmdMessage(protocol.CMD_CAM_PREV))
   end)
 
+  t.it('CMD_GEAR_UP vaut exactement cmd|gear_up', function()
+    t.assertEquals(protocol.CMD_GEAR_UP, 'cmd|gear_up')
+  end)
+
+  t.it('CMD_GEAR_DOWN vaut exactement cmd|gear_down', function()
+    t.assertEquals(protocol.CMD_GEAR_DOWN, 'cmd|gear_down')
+  end)
+
+  t.it('les commandes gear sont reconnues comme cmd', function()
+    t.assertTrue(protocol.isCmdMessage(protocol.CMD_GEAR_UP))
+    t.assertTrue(protocol.isCmdMessage(protocol.CMD_GEAR_DOWN))
+  end)
+
   t.it('toutes les commandes sont distinctes', function()
     local cmds = {
       protocol.CMD_NEXT_VEHICLE,
       protocol.CMD_PREV_VEHICLE,
       protocol.CMD_CAM_NEXT,
       protocol.CMD_CAM_PREV,
+      protocol.CMD_GEAR_UP,
+      protocol.CMD_GEAR_DOWN,
     }
     for i = 1, #cmds do
       for j = i + 1, #cmds do

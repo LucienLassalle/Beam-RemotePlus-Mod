@@ -13,7 +13,7 @@
 -- La logique testable (sans dépendance à l'environnement BeamNG) vit dans
 -- protocol.lua ; voir Beam-RemotePlus-Mod/test/ pour les tests unitaires.
 
-local BUILD_TAG = 'devel-8'
+local BUILD_TAG = 'devel-9'
 local logTag = 'beamRemotePlus'
 
 -- require() met en cache par chemin (package.loaded), indépendamment du
@@ -79,7 +79,7 @@ local function handlePing(ip, data)
 
   if not clients[ip] then
     local deviceInst = extensions.core_input_virtualInput.createDevice(
-      'BeamRemotePlus', 'bngremoteplusv1', 3, 0, 0)
+      'BeamRemotePlus', 'bngremoteplusv1', 3, 2, 0) -- 3 axes, 2 boutons (shiftUp/Down)
     if not deviceInst or deviceInst < 0 then
       log('E', logTag, 'unable to create virtual input device for ' .. ip)
       return
@@ -125,6 +125,15 @@ local function handleCommand(ip, data)
     else
       log('W', logTag, 'core_camera not available for cam_prev')
     end
+  elseif data == protocol.CMD_GEAR_UP then
+    -- Impulsion bouton 0 (shiftUp) : pression immédiatement suivie d'un relâchement
+    extensions.core_input_virtualInput.emit(client.deviceInst, 'button', 0, 'change', 1)
+    extensions.core_input_virtualInput.emit(client.deviceInst, 'button', 0, 'change', 0)
+    log('I', logTag, 'gear up (from ' .. ip .. ')')
+  elseif data == protocol.CMD_GEAR_DOWN then
+    extensions.core_input_virtualInput.emit(client.deviceInst, 'button', 1, 'change', 1)
+    extensions.core_input_virtualInput.emit(client.deviceInst, 'button', 1, 'change', 0)
+    log('I', logTag, 'gear down (from ' .. ip .. ')')
   else
     log('W', logTag, 'unknown command from ' .. ip .. ': ' .. tostring(data))
   end

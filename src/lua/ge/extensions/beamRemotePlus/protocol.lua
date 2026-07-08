@@ -34,6 +34,8 @@ M.CMD_NEXT_VEHICLE = 'cmd|next_vehicle'
 M.CMD_PREV_VEHICLE = 'cmd|prev_vehicle'
 M.CMD_CAM_NEXT     = 'cmd|cam_next'
 M.CMD_CAM_PREV     = 'cmd|cam_prev'
+M.CMD_GEAR_UP      = 'cmd|gear_up'
+M.CMD_GEAR_DOWN    = 'cmd|gear_down'
 
 function M.isPingMessage(data)
   return data ~= nil and data:sub(1, #M.PING_PREFIX) == M.PING_PREFIX
