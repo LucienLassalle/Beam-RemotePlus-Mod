@@ -18,7 +18,7 @@ end)
 
 local M = {}
 
-M.HOST_PORT = 4446   -- le mod écoute ici (ping + contrôle), côté PC
+M.HOST_PORT = 4446   -- le mod écoute ici (ping + contrôle + commandes), côté PC
 M.CLIENT_PORT = 4447 -- l'app mobile écoute ici (pong + télémétrie)
 M.PING_PREFIX = 'beamngremoteplus|ping|'
 M.PONG_PREFIX = 'beamngremoteplus|pong|'
@@ -27,8 +27,18 @@ M.CLIENT_TIMEOUT_MS = 10000
 M.TELEMETRY_INTERVAL_MS = 33 -- ~30Hz
 M.HEARTBEAT_INTERVAL_MS = 5000
 
+-- Commandes textuelles envoyées par l'app (préfixe 'cmd|').
+-- Distinguables des paquets de contrôle binaires (12 octets exactement).
+M.CMD_PREFIX       = 'cmd|'
+M.CMD_NEXT_VEHICLE = 'cmd|next_vehicle'
+M.CMD_PREV_VEHICLE = 'cmd|prev_vehicle'
+
 function M.isPingMessage(data)
   return data ~= nil and data:sub(1, #M.PING_PREFIX) == M.PING_PREFIX
+end
+
+function M.isCmdMessage(data)
+  return data ~= nil and data:sub(1, #M.CMD_PREFIX) == M.CMD_PREFIX
 end
 
 function M.buildPingMessage(code)

@@ -13,7 +13,7 @@
 -- La logique testable (sans dépendance à l'environnement BeamNG) vit dans
 -- protocol.lua ; voir Beam-RemotePlus-Mod/test/ pour les tests unitaires.
 
-local BUILD_TAG = 'devel-6'
+local BUILD_TAG = 'devel-7'
 local logTag = 'beamRemotePlus'
 
 -- require() met en cache par chemin (package.loaded), indépendamment du
@@ -96,6 +96,22 @@ local function handlePing(ip, data)
   local pong = protocol.buildPongMessage(code)
   udpSocket:sendto(pong, ip, protocol.CLIENT_PORT)
   log('I', logTag, 'pong sent to ' .. ip .. ':' .. protocol.CLIENT_PORT .. ' -> ' .. pong)
+end
+
+local function handleCommand(ip, data)
+  local client = clients[ip]
+  if not client then return end
+  client.lastSeen = Engine.Platform.getSystemTimeMS()
+
+  if data == protocol.CMD_NEXT_VEHICLE then
+    be:nextVehicle()
+    log('I', logTag, 'next vehicle (from ' .. ip .. ')')
+  elseif data == protocol.CMD_PREV_VEHICLE then
+    be:prevVehicle()
+    log('I', logTag, 'prev vehicle (from ' .. ip .. ')')
+  else
+    log('W', logTag, 'unknown command from ' .. ip .. ': ' .. tostring(data))
+  end
 end
 
 local function handleControl(ip, data)
@@ -198,7 +214,11 @@ local function onUpdate()
     if protocol.isPingMessage(data) then
       handlePing(ip, data)
     elseif clients[ip] then
-      handleControl(ip, data)
+      if protocol.isCmdMessage(data) then
+        handleCommand(ip, data)
+      else
+        handleControl(ip, data)
+      end
     else
       log('W', logTag, 'unexpected packet from unknown client ' .. tostring(ip) .. ', ' .. #data .. ' octets')
     end
