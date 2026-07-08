@@ -26,4 +26,9 @@ echo "Copié dans:  $PKG_ZIP"
 if [[ -d "$BEAMNG_MODS_DIR" ]]; then
   cp "$OUT_ZIP" "$BEAMNG_MODS_DIR/Beam-RemotePlus.zip"
   echo "Déployé:     $BEAMNG_MODS_DIR/Beam-RemotePlus.zip"
+  # Crée le trigger de hot-reload : si BeamNG tourne déjà avec le mod actif,
+  # l'extension le détecte dans les 3 s et recharge automatiquement le zip
+  # sans passer par le gestionnaire de mods (désactiver/réactiver).
+  touch "$BEAMNG_MODS_DIR/Beam-RemotePlus-reload.trigger"
+  echo "Trigger:     $BEAMNG_MODS_DIR/Beam-RemotePlus-reload.trigger"
 fi

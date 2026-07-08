@@ -13,8 +13,17 @@
 -- La logique testable (sans dépendance à l'environnement BeamNG) vit dans
 -- protocol.lua ; voir Beam-RemotePlus-Mod/test/ pour les tests unitaires.
 
-local BUILD_TAG = 'devel-11'
+local BUILD_TAG = 'devel-12'
 local logTag = 'beamRemotePlus'
+
+-- Chemin VFS du zip et du fichier trigger de hot-reload.
+-- Le script de build crée ce trigger après avoir copié le nouveau zip ;
+-- onUpdate() le détecte, force le démontage/remontage du zip (nécessaire
+-- car BeamNG met en cache le répertoire central du zip à la première
+-- activation et ne le relit pas si le fichier est remplacé à chaud), puis
+-- recharge l'extension depuis le nouveau contenu.
+local MOD_ZIP_PATH   = '/mods/repo/Beam-RemotePlus.zip'
+local RELOAD_TRIGGER = '/mods/repo/Beam-RemotePlus-reload.trigger'
 
 -- require() met en cache par chemin (package.loaded), indépendamment du
 -- cache d'extensions.lua : sans ce clear, un `extensions.reload()` de ce
@@ -224,6 +233,23 @@ end
 
 local function onUpdate()
   updateTicks = updateTicks + 1
+
+  -- Hot-reload : vérifie le trigger toutes les ~3 s (≈180 ticks à 60 Hz).
+  -- Le trigger est créé par le script de build après avoir écrit le nouveau
+  -- zip. On démonte l'ancien zip (libère le répertoire central mis en cache),
+  -- on remonte le nouveau depuis le disque, puis on recharge l'extension.
+  -- Le trigger est supprimé AVANT le rechargement pour éviter toute boucle.
+  if updateTicks % 180 == 0 and FS:fileExists(RELOAD_TRIGGER) then
+    log('I', logTag, '[' .. BUILD_TAG .. '] hot-reload trigger détecté — remontage du zip')
+    FS:removeFile(RELOAD_TRIGGER)
+    if FS:isMounted(MOD_ZIP_PATH) then
+      FS:unmount(MOD_ZIP_PATH)
+      FS:mountList({{ srcPath = MOD_ZIP_PATH, mountPath = nil }})
+    end
+    extensions.reload('beamRemotePlus_main')
+    return
+  end
+
   if not ensureSocket() then return end
   local now = Engine.Platform.getSystemTimeMS()
 
