@@ -205,6 +205,33 @@ t.describe('Commandes (cmd|)', function()
   t.it('une commande connue n\'est pas aussi un ping', function()
     t.assertFalse(protocol.isPingMessage(protocol.CMD_NEXT_VEHICLE))
   end)
+
+  t.it('CMD_CAM_NEXT vaut exactement cmd|cam_next', function()
+    t.assertEquals(protocol.CMD_CAM_NEXT, 'cmd|cam_next')
+  end)
+
+  t.it('CMD_CAM_PREV vaut exactement cmd|cam_prev', function()
+    t.assertEquals(protocol.CMD_CAM_PREV, 'cmd|cam_prev')
+  end)
+
+  t.it('les commandes caméra sont reconnues comme cmd', function()
+    t.assertTrue(protocol.isCmdMessage(protocol.CMD_CAM_NEXT))
+    t.assertTrue(protocol.isCmdMessage(protocol.CMD_CAM_PREV))
+  end)
+
+  t.it('toutes les commandes sont distinctes', function()
+    local cmds = {
+      protocol.CMD_NEXT_VEHICLE,
+      protocol.CMD_PREV_VEHICLE,
+      protocol.CMD_CAM_NEXT,
+      protocol.CMD_CAM_PREV,
+    }
+    for i = 1, #cmds do
+      for j = i + 1, #cmds do
+        t.assertTrue(cmds[i] ~= cmds[j], 'collision: ' .. cmds[i] .. ' == ' .. cmds[j])
+      end
+    end
+  end)
 end)
 
 t.describe('Paquet de télémétrie', function()

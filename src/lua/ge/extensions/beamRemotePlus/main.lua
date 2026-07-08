@@ -13,7 +13,7 @@
 -- La logique testable (sans dépendance à l'environnement BeamNG) vit dans
 -- protocol.lua ; voir Beam-RemotePlus-Mod/test/ pour les tests unitaires.
 
-local BUILD_TAG = 'devel-7'
+local BUILD_TAG = 'devel-8'
 local logTag = 'beamRemotePlus'
 
 -- require() met en cache par chemin (package.loaded), indépendamment du
@@ -109,6 +109,22 @@ local function handleCommand(ip, data)
   elseif data == protocol.CMD_PREV_VEHICLE then
     be:prevVehicle()
     log('I', logTag, 'prev vehicle (from ' .. ip .. ')')
+  elseif data == protocol.CMD_CAM_NEXT then
+    local player = assignedPlayers[client.deviceInst] or 0
+    if core_camera then
+      core_camera.setVehicleCameraByIndexOffset(player, 1)
+      log('I', logTag, 'cam next (player=' .. tostring(player) .. ')')
+    else
+      log('W', logTag, 'core_camera not available for cam_next')
+    end
+  elseif data == protocol.CMD_CAM_PREV then
+    local player = assignedPlayers[client.deviceInst] or 0
+    if core_camera then
+      core_camera.setVehicleCameraByIndexOffset(player, -1)
+      log('I', logTag, 'cam prev (player=' .. tostring(player) .. ')')
+    else
+      log('W', logTag, 'core_camera not available for cam_prev')
+    end
   else
     log('W', logTag, 'unknown command from ' .. ip .. ': ' .. tostring(data))
   end
