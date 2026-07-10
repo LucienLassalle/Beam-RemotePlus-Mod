@@ -100,6 +100,21 @@ local function handlePing(ip, data)
       title = 'Beam-RemotePlus',
       msg = 'Mod actif : téléphone connecté (' .. ip .. ')',
     })
+
+    -- Sans cet appel, assignedPlayers[deviceInst] reste nil jusqu'à ce que
+    -- quelque chose d'autre déclenche un rescan des périphériques d'entrée
+    -- (typiquement : désactiver puis réactiver le mod). core_input_bindings
+    -- ne détecte pas nativement la création d'un périphérique virtuel via
+    -- core_input_virtualInput (contrairement à un vrai périphérique USB, qui
+    -- déclenche onDeviceChanged() côté moteur) : on force donc le même
+    -- rescan explicitement pour que le device soit assigné à un joueur et
+    -- que onInputBindingsChanged (voir plus bas) peuple assignedPlayers
+    -- immédiatement, sans attendre.
+    if core_input_bindings and core_input_bindings.onDeviceChanged then
+      core_input_bindings.onDeviceChanged()
+    else
+      log('W', logTag, 'core_input_bindings.onDeviceChanged not available, player assignment may be delayed')
+    end
   end
   clients[ip].lastSeen = Engine.Platform.getSystemTimeMS()
   local pong = protocol.buildPongMessage(code)
@@ -147,6 +162,29 @@ local function handleCommand(ip, data)
     extensions.core_input_virtualInput.emit(client.deviceInst, 'button', 1, 'change', 1)
     extensions.core_input_virtualInput.emit(client.deviceInst, 'button', 1, 'change', 0)
     log('I', logTag, 'gear down (from ' .. ip .. ')')
+  elseif data == protocol.CMD_RECOVER_START then
+    -- recovery.startRecovering() est la fonction déclenchée par onDown de
+    -- l'action native "recover_vehicle" (touche Insert) : elle vit côté
+    -- véhicule (VE Lua), d'où le passage par vehicle:queueLuaCommand plutôt
+    -- qu'un appel direct comme be:resetVehicle. getPlayerVehicle(player)
+    -- scope l'appel au véhicule assigné à ce player slot uniquement.
+    local player = assignedPlayers[client.deviceInst] or 0
+    local vehicle = getPlayerVehicle(player)
+    if vehicle then
+      vehicle:queueLuaCommand('recovery.startRecovering()')
+      log('I', logTag, 'recover start (player=' .. tostring(player) .. ', from ' .. ip .. ')')
+    end
+  elseif data == protocol.CMD_RECOVER_STOP then
+    -- recovery.stopRecovering() fige le véhicule au point de rembobinage
+    -- atteint (voir lua/vehicle/recovery.lua) : un stop quasi immédiat
+    -- après un start ressemble donc à une réinitialisation simple, un stop
+    -- tardif à une vraie récupération, exactement comme relâcher Insert.
+    local player = assignedPlayers[client.deviceInst] or 0
+    local vehicle = getPlayerVehicle(player)
+    if vehicle then
+      vehicle:queueLuaCommand('recovery.stopRecovering()')
+      log('I', logTag, 'recover stop (player=' .. tostring(player) .. ', from ' .. ip .. ')')
+    end
   else
     log('W', logTag, 'unknown command from ' .. ip .. ': ' .. tostring(data))
   end

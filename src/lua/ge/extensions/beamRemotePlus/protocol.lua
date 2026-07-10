@@ -36,6 +36,14 @@ M.CMD_CAM_NEXT     = 'cmd|cam_next'
 M.CMD_CAM_PREV     = 'cmd|cam_prev'
 M.CMD_GEAR_UP      = 'cmd|gear_up'
 M.CMD_GEAR_DOWN    = 'cmd|gear_down'
+-- Répliquent le comportement du bouton "Insert" (recover_vehicle) natif :
+-- onDown démarre le rembobinage vers l'historique de positions, onUp fige
+-- le véhicule au point atteint. Un appui bref = petite correction (quasi
+-- sur place), un appui long = récupération plus loin dans l'historique,
+-- exactement comme maintenir la touche sur PC (voir
+-- lua/ge/extensions/core/input/actions/gameplay.json:6 côté jeu).
+M.CMD_RECOVER_START = 'cmd|recover_start'
+M.CMD_RECOVER_STOP  = 'cmd|recover_stop'
 
 function M.isPingMessage(data)
   return data ~= nil and data:sub(1, #M.PING_PREFIX) == M.PING_PREFIX

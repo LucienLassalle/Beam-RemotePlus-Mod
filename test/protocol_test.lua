@@ -232,6 +232,19 @@ t.describe('Commandes (cmd|)', function()
     t.assertTrue(protocol.isCmdMessage(protocol.CMD_GEAR_DOWN))
   end)
 
+  t.it('CMD_RECOVER_START vaut exactement cmd|recover_start', function()
+    t.assertEquals(protocol.CMD_RECOVER_START, 'cmd|recover_start')
+  end)
+
+  t.it('CMD_RECOVER_STOP vaut exactement cmd|recover_stop', function()
+    t.assertEquals(protocol.CMD_RECOVER_STOP, 'cmd|recover_stop')
+  end)
+
+  t.it('les commandes recover sont reconnues comme cmd', function()
+    t.assertTrue(protocol.isCmdMessage(protocol.CMD_RECOVER_START))
+    t.assertTrue(protocol.isCmdMessage(protocol.CMD_RECOVER_STOP))
+  end)
+
   t.it('toutes les commandes sont distinctes', function()
     local cmds = {
       protocol.CMD_NEXT_VEHICLE,
@@ -240,6 +253,8 @@ t.describe('Commandes (cmd|)', function()
       protocol.CMD_CAM_PREV,
       protocol.CMD_GEAR_UP,
       protocol.CMD_GEAR_DOWN,
+      protocol.CMD_RECOVER_START,
+      protocol.CMD_RECOVER_STOP,
     }
     for i = 1, #cmds do
       for j = i + 1, #cmds do
