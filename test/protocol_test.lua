@@ -106,12 +106,26 @@ t.describe('computeLightsBitmask', function()
   t.it('frein à main ignoré si valeur à 0', function()
     t.assertEquals(protocol.computeLightsBitmask({ parkingbrake = 0 }), 0)
   end)
+
+  t.it('détecte le TC actif', function()
+    t.assertEquals(
+      protocol.computeLightsBitmask({ hasTCS = true, tcsActive = 1 }),
+      protocol.LIGHT_BIT_TC
+    )
+  end)
+
+  t.it('TC ignoré si le véhicule n\'en a pas (hasTCS false)', function()
+    t.assertEquals(
+      protocol.computeLightsBitmask({ hasTCS = false, tcsActive = 1 }),
+      0
+    )
+  end)
 end)
 
 t.describe('buildTelemetryCallExpression (régression bug %q)', function()
   t.it('quote correctement une IP (ne doit pas lever une erreur au parsing Lua)', function()
     local expr = protocol.buildTelemetryCallExpression(
-      '192.168.1.151', 27.7, 4200, 7000, 2, 0.42, 91.5, 0, 0
+      '192.168.1.151', 27.7, 4200, 7000, 2, 0.42, 91.5, 0, 0, 0
     )
     -- Avant le correctif, %s (au lieu de %q) produisait
     -- "onTelemetry(192.168.1.151, ...)" sans guillemets : Lua essayait de
@@ -123,7 +137,7 @@ t.describe('buildTelemetryCallExpression (régression bug %q)', function()
 
   t.it('contient l\'IP entourée de guillemets dans le texte généré', function()
     local expr = protocol.buildTelemetryCallExpression(
-      '192.168.1.151', 0, 0, 0, 0, 0, 0, 0, 0
+      '192.168.1.151', 0, 0, 0, 0, 0, 0, 0, 0, 0
     )
     t.assertTrue(
       expr:find('"192.168.1.151"', 1, true) ~= nil,
@@ -134,7 +148,7 @@ t.describe('buildTelemetryCallExpression (régression bug %q)', function()
   t.it('capture bien l\'IP en tant que string (et pas un nombre) à l\'exécution', function()
     local capturedIp, capturedSpeed
     local expr = protocol.buildTelemetryCallExpression(
-      '10.0.0.42', 12.5, 3000, 7000, 3, 0.8, 90, 0, 0
+      '10.0.0.42', 12.5, 3000, 7000, 3, 0.8, 90, 0, 0, 0
     )
     -- simule extensions.beamRemotePlus_main.onTelemetry pour capturer l'appel
     local env = {
@@ -265,14 +279,14 @@ t.describe('Commandes (cmd|)', function()
 end)
 
 t.describe('Paquet de télémétrie', function()
-  t.it('encode 32 octets (8 floats)', function()
-    local bytes = protocol.encodeTelemetryPacket(25, 3500, 7000, 2, 0.6, 88.5, 16, 1)
-    t.assertEquals(#bytes, 32)
+  t.it('encode 36 octets (9 floats)', function()
+    local bytes = protocol.encodeTelemetryPacket(25, 3500, 7000, 2, 0.6, 88.5, 16, 1, 95.2)
+    t.assertEquals(#bytes, 36)
   end)
 
   t.it('layout little-endian cohérent avec ModTelemetryPacket côté Dart', function()
     local ffi = require('ffi')
-    local bytes = protocol.encodeTelemetryPacket(25, 3500, 7000, 2, 0.6, 88.5, 16, 1)
+    local bytes = protocol.encodeTelemetryPacket(25, 3500, 7000, 2, 0.6, 88.5, 16, 1, 95.2)
     local view = ffi.cast('float*', bytes)
     t.assertCloseTo(view[0], 25)    -- speed
     t.assertCloseTo(view[1], 3500)  -- rpm
@@ -282,6 +296,14 @@ t.describe('Paquet de télémétrie', function()
     t.assertCloseTo(view[5], 88.5)  -- engineTemp
     t.assertCloseTo(view[6], 16)    -- lights
     t.assertCloseTo(view[7], 1)     -- shiftLight
+    t.assertCloseTo(view[8], 95.2)  -- oilTemp
+  end)
+
+  t.it('oilTemp par défaut à 0 si non fourni', function()
+    local ffi = require('ffi')
+    local bytes = protocol.encodeTelemetryPacket(0, 0, 0, 0, 0, 0, 0, 0)
+    local view = ffi.cast('float*', bytes)
+    t.assertCloseTo(view[8], 0)
   end)
 end)
 

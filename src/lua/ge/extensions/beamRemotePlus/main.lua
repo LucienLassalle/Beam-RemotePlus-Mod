@@ -251,25 +251,42 @@ local function requestTelemetry(ip, client)
       if e.signal_R and e.signal_R ~= 0 then lights = lights + 16 end
       if e.oil and e.oil ~= 0 then lights = lights + 32 end
       if e.hasABS and e.absActive and e.absActive ~= 0 then lights = lights + 64 end
+      -- Noms de champs électriques du contrôleur TCS non garantis identiques
+      -- sur tous les véhicules (contrairement à hasABS/absActive, très
+      -- standard) : dégrade silencieusement à "TC inactif" si absents,
+      -- plutôt que de planter.
+      if e.hasTCS and e.tcsActive and e.tcsActive ~= 0 then lights = lights + 128 end
       local shiftLight = e.shouldShift and 1 or 0
       obj:queueGameEngineLua(string.format(
-        "extensions.beamRemotePlus_main.onTelemetry(%q, %s, %s, %s, %s, %s, %s, %s, %s)",
+        "extensions.beamRemotePlus_main.onTelemetry(%q, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
   ]] .. ipLiteral .. [[, e.wheelspeed or 0, e.rpm or 0,
         e.maxrpm or 0, (e.gearIndex or -1) + 1,
-        e.fuel or 0, e.watertemp or 0, lights, shiftLight))
+        e.fuel or 0, e.watertemp or 0, lights, shiftLight, e.oiltemp or 0))
     end
   ]]
   vehicle:queueLuaCommand(vehicleCommand)
 end
 
-local function onTelemetry(ip, speed, rpm, redlineRpm, gear, fuel, engineTemp, lights, shiftLight)
+local function onTelemetry(ip, speed, rpm, redlineRpm, gear, fuel, engineTemp, lights, shiftLight, oilTemp)
   if not udpSocket or not clients[ip] then return end
-  local bytes = protocol.encodeTelemetryPacket(
-    speed, rpm, redlineRpm, gear, fuel, engineTemp, lights, shiftLight)
+  -- pcall : un souci d'encodage télémétrie (champ FFI manquant/incohérent,
+  -- valeur inattendue...) ne doit jamais pouvoir faire planter toute
+  -- l'extension et couper les contrôles (steering/throttle/brake) qui n'ont
+  -- rien à voir avec la télémétrie. Au pire, cette trame de télémétrie est
+  -- perdue ; au mieux ça évite un incident vécu (voir commentaire dans
+  -- protocol.lua sur le versionnage des structs FFI).
+  local ok, bytes = pcall(
+    protocol.encodeTelemetryPacket,
+    speed, rpm, redlineRpm, gear, fuel, engineTemp, lights, shiftLight, oilTemp
+  )
+  if not ok then
+    log('E', logTag, 'encodeTelemetryPacket a échoué (télémétrie ignorée cette frame): ' .. tostring(bytes))
+    return
+  end
   udpSocket:sendto(bytes, ip, protocol.CLIENT_PORT)
 end
 
-local function onUpdate()
+local function onUpdateImpl()
   updateTicks = updateTicks + 1
 
   -- Hot-reload : vérifie le trigger toutes les ~3 s (≈180 ticks à 60 Hz).
@@ -328,6 +345,26 @@ local function onUpdate()
     if now - last >= protocol.TELEMETRY_INTERVAL_MS then
       lastTelemetrySent[ip] = now
       requestTelemetry(ip, client)
+    end
+  end
+end
+
+-- Filet de sécurité global : quoi qu'il arrive dans onUpdateImpl (bug non
+-- encore identifié, cas limite d'un véhicule particulier...), une erreur ne
+-- doit jamais pouvoir désactiver toute l'extension et couper les contrôles.
+-- Coûte praticité nulle (log seulement en cas d'erreur réelle) et évite de
+-- revivre l'incident où un souci de télémétrie a rendu toute l'interface
+-- inactive.
+local lastErrorLogAt = 0
+local function onUpdate()
+  local ok, err = pcall(onUpdateImpl)
+  if not ok then
+    local now = Engine.Platform.getSystemTimeMS()
+    -- Throttle du log : sans ça, une erreur systématique par frame (60/s)
+    -- inonderait la console au lieu d'informer.
+    if now - lastErrorLogAt > 3000 then
+      lastErrorLogAt = now
+      log('E', logTag, 'onUpdate error (récupéré, extension toujours active): ' .. tostring(err))
     end
   end
 end

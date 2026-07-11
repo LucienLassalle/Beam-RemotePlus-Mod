@@ -6,13 +6,22 @@ local ffi = require('ffi')
 
 -- ffi.cdef enregistre les types dans un espace de noms C GLOBAL au
 -- processus (pas par état Lua) : si ce module est rechargé (désactivation
--- puis réactivation du mod dans le gestionnaire), un second appel avec les
--- mêmes noms de types lève une erreur. On l'ignore : elle signifie juste
--- que les types sont déjà enregistrés depuis un chargement précédent.
+-- puis réactivation du mod dans le gestionnaire, ou hot-reload dev), un
+-- second appel avec les mêmes noms de types lève une erreur. On l'ignore :
+-- elle signifie normalement juste que les types sont déjà enregistrés
+-- depuis un chargement précédent AVEC LE MÊME LAYOUT.
+--
+-- ATTENTION (bug vécu) : si la DISPOSITION d'un struct change (champ
+-- ajouté/retiré) sans changer son NOM, ce pcall avale aussi l'erreur de
+-- redéfinition — le VIEUX type reste actif en mémoire, et tout code qui
+-- lit/écrit un champ absent de l'ancien layout plante (et peut faire
+-- tomber toute l'extension, donc les contrôles). RÈGLE : toute modification
+-- de la disposition d'un struct FFI ici DOIT s'accompagner d'un changement
+-- de son nom (ex: _v2 -> _v3), jamais d'une simple édition sur place.
 pcall(function()
   ffi.cdef[[
   typedef struct { float steering, throttle, brake; } rp_control_t;
-  typedef struct { float speed, rpm, redlineRpm, gear, fuel, engineTemp, lights, shiftLight; } rp_telemetry_t;
+  typedef struct { float speed, rpm, redlineRpm, gear, fuel, engineTemp, lights, shiftLight, oilTemp; } rp_telemetry_v2_t;
   ]]
 end)
 
@@ -91,10 +100,11 @@ M.LIGHT_BIT_SIGNAL_LEFT = 8
 M.LIGHT_BIT_SIGNAL_RIGHT = 16
 M.LIGHT_BIT_OIL_WARNING = 32
 M.LIGHT_BIT_ABS = 64
+M.LIGHT_BIT_TC = 128
 
 -- electrics: table simple {lowbeam=, highbeam=, parkingbrake=, signal_L=,
--- signal_R=, oil=, hasABS=, absActive=}, reflétant electrics.values côté
--- véhicule.
+-- signal_R=, oil=, hasABS=, absActive=, hasTCS=, tcsActive=}, reflétant
+-- electrics.values côté véhicule.
 function M.computeLightsBitmask(electrics)
   local lights = 0
   if electrics.lowbeam == 1 then lights = lights + M.LIGHT_BIT_LOW_BEAM end
@@ -114,6 +124,9 @@ function M.computeLightsBitmask(electrics)
   if electrics.hasABS and electrics.absActive and electrics.absActive ~= 0 then
     lights = lights + M.LIGHT_BIT_ABS
   end
+  if electrics.hasTCS and electrics.tcsActive and electrics.tcsActive ~= 0 then
+    lights = lights + M.LIGHT_BIT_TC
+  end
   return lights
 end
 
@@ -123,11 +136,11 @@ end
 -- "192.168.1.151" non quotée serait interprétée par Lua comme un nombre
 -- malformé (bug historique corrigé ici, voir test associé).
 function M.buildTelemetryCallExpression(
-  ip, speed, rpm, redlineRpm, gear, fuel, engineTemp, lights, shiftLight
+  ip, speed, rpm, redlineRpm, gear, fuel, engineTemp, lights, shiftLight, oilTemp
 )
   return string.format(
-    'extensions.beamRemotePlus_main.onTelemetry(%q, %s, %s, %s, %s, %s, %s, %s, %s)',
-    ip, speed, rpm, redlineRpm, gear, fuel, engineTemp, lights, shiftLight
+    'extensions.beamRemotePlus_main.onTelemetry(%q, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+    ip, speed, rpm, redlineRpm, gear, fuel, engineTemp, lights, shiftLight, oilTemp
   )
 end
 
@@ -147,9 +160,9 @@ function M.decodeControlPacket(data)
 end
 
 function M.encodeTelemetryPacket(
-  speed, rpm, redlineRpm, gear, fuel, engineTemp, lights, shiftLight
+  speed, rpm, redlineRpm, gear, fuel, engineTemp, lights, shiftLight, oilTemp
 )
-  local packet = ffi.new('rp_telemetry_t')
+  local packet = ffi.new('rp_telemetry_v2_t')
   packet.speed = speed
   packet.rpm = rpm
   packet.redlineRpm = redlineRpm
@@ -158,6 +171,7 @@ function M.encodeTelemetryPacket(
   packet.engineTemp = engineTemp
   packet.lights = lights
   packet.shiftLight = shiftLight
+  packet.oilTemp = oilTemp or 0
   return ffi.string(packet, ffi.sizeof(packet))
 end
 
