@@ -13,7 +13,7 @@
 -- La logique testable (sans dépendance à l'environnement BeamNG) vit dans
 -- protocol.lua ; voir Beam-RemotePlus-Mod/test/ pour les tests unitaires.
 
-local BUILD_TAG = 'devel-12'
+local BUILD_TAG = 'devel-13'
 local logTag = 'beamRemotePlus'
 
 -- Chemin VFS du zip et du fichier trigger de hot-reload.
@@ -87,6 +87,10 @@ local function handlePing(ip, data)
   end
 
   if not clients[ip] then
+    if not extensions.core_input_virtualInput then
+      log('E', logTag, 'extensions.core_input_virtualInput indisponible, impossible de connecter ' .. ip)
+      return
+    end
     local deviceInst = extensions.core_input_virtualInput.createDevice(
       'BeamRemotePlus', 'bngremoteplusv1', 3, 2, 0) -- 3 axes, 2 boutons (shiftUp/Down)
     if not deviceInst or deviceInst < 0 then
@@ -128,11 +132,19 @@ local function handleCommand(ip, data)
   client.lastSeen = Engine.Platform.getSystemTimeMS()
 
   if data == protocol.CMD_NEXT_VEHICLE then
+    if not extensions.core_input_vehicleSwitching then
+      log('W', logTag, 'core_input_vehicleSwitching indisponible pour next_vehicle')
+      return
+    end
     local player = assignedPlayers[client.deviceInst] or 0
     extensions.core_input_vehicleSwitching.switchCycleVehicle(player, 1)
     client.forcedEmit = true
     log('I', logTag, 'next vehicle (player=' .. tostring(player) .. ', from ' .. ip .. ')')
   elseif data == protocol.CMD_PREV_VEHICLE then
+    if not extensions.core_input_vehicleSwitching then
+      log('W', logTag, 'core_input_vehicleSwitching indisponible pour prev_vehicle')
+      return
+    end
     local player = assignedPlayers[client.deviceInst] or 0
     extensions.core_input_vehicleSwitching.switchCycleVehicle(player, -1)
     client.forcedEmit = true
@@ -154,11 +166,19 @@ local function handleCommand(ip, data)
       log('W', logTag, 'core_camera not available for cam_prev')
     end
   elseif data == protocol.CMD_GEAR_UP then
+    if not extensions.core_input_virtualInput then
+      log('W', logTag, 'core_input_virtualInput indisponible pour gear_up')
+      return
+    end
     -- Impulsion bouton 0 (shiftUp) : pression immédiatement suivie d'un relâchement
     extensions.core_input_virtualInput.emit(client.deviceInst, 'button', 0, 'change', 1)
     extensions.core_input_virtualInput.emit(client.deviceInst, 'button', 0, 'change', 0)
     log('I', logTag, 'gear up (from ' .. ip .. ')')
   elseif data == protocol.CMD_GEAR_DOWN then
+    if not extensions.core_input_virtualInput then
+      log('W', logTag, 'core_input_virtualInput indisponible pour gear_down')
+      return
+    end
     extensions.core_input_virtualInput.emit(client.deviceInst, 'button', 1, 'change', 1)
     extensions.core_input_virtualInput.emit(client.deviceInst, 'button', 1, 'change', 0)
     log('I', logTag, 'gear down (from ' .. ip .. ')')
@@ -168,6 +188,10 @@ local function handleCommand(ip, data)
     -- véhicule (VE Lua), d'où le passage par vehicle:queueLuaCommand plutôt
     -- qu'un appel direct comme be:resetVehicle. getPlayerVehicle(player)
     -- scope l'appel au véhicule assigné à ce player slot uniquement.
+    if type(getPlayerVehicle) ~= 'function' then
+      log('W', logTag, 'getPlayerVehicle indisponible pour recover_start')
+      return
+    end
     local player = assignedPlayers[client.deviceInst] or 0
     local vehicle = getPlayerVehicle(player)
     if vehicle then
@@ -179,6 +203,10 @@ local function handleCommand(ip, data)
     -- atteint (voir lua/vehicle/recovery.lua) : un stop quasi immédiat
     -- après un start ressemble donc à une réinitialisation simple, un stop
     -- tardif à une vraie récupération, exactement comme relâcher Insert.
+    if type(getPlayerVehicle) ~= 'function' then
+      log('W', logTag, 'getPlayerVehicle indisponible pour recover_stop')
+      return
+    end
     local player = assignedPlayers[client.deviceInst] or 0
     local vehicle = getPlayerVehicle(player)
     if vehicle then
@@ -197,6 +225,10 @@ local function handleControl(ip, data)
   local steering, throttle, brake = protocol.decodeControlPacket(data)
   if steering == nil then
     log('W', logTag, 'control packet from ' .. ip .. ' has wrong size: ' .. #data)
+    return
+  end
+  if not extensions.core_input_virtualInput then
+    log('W', logTag, 'core_input_virtualInput indisponible, contrôle ignoré')
     return
   end
   client.lastSeen = Engine.Platform.getSystemTimeMS()
@@ -230,6 +262,7 @@ end
 local function requestTelemetry(ip, client)
   local player = assignedPlayers[client.deviceInst]
   if not player then return end
+  if type(getPlayerVehicle) ~= 'function' then return end
   local vehicle = getPlayerVehicle(player)
   if not vehicle then return end
 
@@ -239,51 +272,64 @@ local function requestTelemetry(ip, client)
   -- n'a pas accès à ce module GE. Garder buildTelemetryCallExpression et
   -- ce format en synchronisation (le test dédié documente le format
   -- attendu, y compris le bug %q corrigé ici).
+  --
+  -- Tout le corps est enveloppé dans un pcall : ce code tourne dans le
+  -- contexte Lua du véhicule (VE), une VM que ce module GE ne contrôle pas
+  -- et dont le contenu d'electrics.values peut changer sans préavis selon
+  -- le véhicule ou une future version de BeamNG (champ manquant, type
+  -- inattendu...). tonumber(x) or 0 dégrade proprement une valeur qui
+  -- existe mais n'est plus numérique ; le pcall couvre tout le reste (champ
+  -- complètement absent d'une façon qui romprait même ça, API véhicule
+  -- renommée, etc.) pour qu'une télémétrie perdue ne remonte jamais une
+  -- erreur Lua non rattrapée côté véhicule.
   local ipLiteral = string.format('%q', ip)
   local vehicleCommand = [[
-    if electrics and electrics.values then
-      local e = electrics.values
-      local lights = 0
-      if e.lowbeam == 1 then lights = lights + 1 end
-      if e.highbeam == 1 then lights = lights + 2 end
-      if e.parkingbrake and e.parkingbrake > 0 then lights = lights + 4 end
-      if e.signal_L and e.signal_L ~= 0 then lights = lights + 8 end
-      if e.signal_R and e.signal_R ~= 0 then lights = lights + 16 end
-      if e.oil and e.oil ~= 0 then lights = lights + 32 end
-      if e.hasABS and e.absActive and e.absActive ~= 0 then lights = lights + 64 end
-      -- Noms de champs électriques du contrôleur TCS non garantis identiques
-      -- sur tous les véhicules (contrairement à hasABS/absActive, très
-      -- standard) : dégrade silencieusement à "TC inactif" si absents,
-      -- plutôt que de planter.
-      if e.hasTCS and e.tcsActive and e.tcsActive ~= 0 then lights = lights + 128 end
-      local shiftLight = e.shouldShift and 1 or 0
-      obj:queueGameEngineLua(string.format(
-        "extensions.beamRemotePlus_main.onTelemetry(%q, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-  ]] .. ipLiteral .. [[, e.wheelspeed or 0, e.rpm or 0,
-        e.maxrpm or 0, (e.gearIndex or -1) + 1,
-        e.fuel or 0, e.watertemp or 0, lights, shiftLight, e.oiltemp or 0))
+    local ok, err = pcall(function()
+      if electrics and electrics.values then
+        local e = electrics.values
+        local function n(v) return tonumber(v) or 0 end
+        local lights = 0
+        if e.lowbeam == 1 then lights = lights + 1 end
+        if e.highbeam == 1 then lights = lights + 2 end
+        if e.parkingbrake and e.parkingbrake > 0 then lights = lights + 4 end
+        if e.signal_L and e.signal_L ~= 0 then lights = lights + 8 end
+        if e.signal_R and e.signal_R ~= 0 then lights = lights + 16 end
+        if e.oil and e.oil ~= 0 then lights = lights + 32 end
+        if e.hasABS and e.absActive and e.absActive ~= 0 then lights = lights + 64 end
+        -- Noms de champs du contrôleur TCS non garantis identiques sur tous
+        -- les véhicules : dégrade silencieusement à "TC inactif" si absents.
+        if e.hasTCS and e.tcsActive and e.tcsActive ~= 0 then lights = lights + 128 end
+        local shiftLight = e.shouldShift and 1 or 0
+        obj:queueGameEngineLua(string.format(
+          "extensions.beamRemotePlus_main.onTelemetry(%q, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+  ]] .. ipLiteral .. [[, n(e.wheelspeed), n(e.rpm),
+          n(e.maxrpm), (tonumber(e.gearIndex) or -1) + 1,
+          n(e.fuel), n(e.watertemp), lights, shiftLight, n(e.oiltemp)))
+      end
+    end)
+    if not ok and log then
+      log('W', 'beamRemotePlus', 'requestTelemetry (véhicule): ' .. tostring(err))
     end
   ]]
   vehicle:queueLuaCommand(vehicleCommand)
 end
 
+-- Tout le corps est enveloppé dans un pcall : un souci d'encodage télémétrie
+-- (champ FFI manquant/incohérent, valeur inattendue...) ne doit jamais
+-- pouvoir faire planter toute l'extension et couper les contrôles
+-- (steering/throttle/brake) qui n'ont rien à voir avec la télémétrie. Au
+-- pire, cette trame de télémétrie est perdue (voir aussi le commentaire dans
+-- protocol.lua sur le versionnage des structs FFI).
 local function onTelemetry(ip, speed, rpm, redlineRpm, gear, fuel, engineTemp, lights, shiftLight, oilTemp)
-  if not udpSocket or not clients[ip] then return end
-  -- pcall : un souci d'encodage télémétrie (champ FFI manquant/incohérent,
-  -- valeur inattendue...) ne doit jamais pouvoir faire planter toute
-  -- l'extension et couper les contrôles (steering/throttle/brake) qui n'ont
-  -- rien à voir avec la télémétrie. Au pire, cette trame de télémétrie est
-  -- perdue ; au mieux ça évite un incident vécu (voir commentaire dans
-  -- protocol.lua sur le versionnage des structs FFI).
-  local ok, bytes = pcall(
-    protocol.encodeTelemetryPacket,
-    speed, rpm, redlineRpm, gear, fuel, engineTemp, lights, shiftLight, oilTemp
-  )
+  local ok, err = pcall(function()
+    if not udpSocket or not clients[ip] then return end
+    local bytes = protocol.encodeTelemetryPacket(
+      speed, rpm, redlineRpm, gear, fuel, engineTemp, lights, shiftLight, oilTemp)
+    udpSocket:sendto(bytes, ip, protocol.CLIENT_PORT)
+  end)
   if not ok then
-    log('E', logTag, 'encodeTelemetryPacket a échoué (télémétrie ignorée cette frame): ' .. tostring(bytes))
-    return
+    log('W', logTag, 'onTelemetry: envoi ignoré (' .. tostring(err) .. ')')
   end
-  udpSocket:sendto(bytes, ip, protocol.CLIENT_PORT)
 end
 
 local function onUpdateImpl()
@@ -317,26 +363,37 @@ local function onUpdateImpl()
 
   for ip, client in pairs(clients) do
     if protocol.isClientTimedOut(now, client.lastSeen, protocol.CLIENT_TIMEOUT_MS) then
-      extensions.core_input_virtualInput.deleteDevice(client.deviceInst)
+      if extensions.core_input_virtualInput then
+        extensions.core_input_virtualInput.deleteDevice(client.deviceInst)
+      end
       clients[ip] = nil
       lastTelemetrySent[ip] = nil
       log('I', logTag, 'client timed out: ' .. ip)
     end
   end
 
+  -- Chaque paquet est dispatché dans son propre pcall : un paquet
+  -- particulier ne doit jamais empêcher de traiter le reste de la file
+  -- reçue cette frame (ex: un client envoie une commande malformée pendant
+  -- qu'un autre attend son paquet de contrôle).
   while true do
     local data, ip = udpSocket:receivefrom(64)
     if not data then break end
-    if protocol.isPingMessage(data) then
-      handlePing(ip, data)
-    elseif clients[ip] then
-      if protocol.isCmdMessage(data) then
-        handleCommand(ip, data)
+    local ok, err = pcall(function()
+      if protocol.isPingMessage(data) then
+        handlePing(ip, data)
+      elseif clients[ip] then
+        if protocol.isCmdMessage(data) then
+          handleCommand(ip, data)
+        else
+          handleControl(ip, data)
+        end
       else
-        handleControl(ip, data)
+        log('W', logTag, 'unexpected packet from unknown client ' .. tostring(ip) .. ', ' .. #data .. ' octets')
       end
-    else
-      log('W', logTag, 'unexpected packet from unknown client ' .. tostring(ip) .. ', ' .. #data .. ' octets')
+    end)
+    if not ok then
+      log('W', logTag, 'paquet ignoré (' .. tostring(ip) .. '): ' .. tostring(err))
     end
   end
 
@@ -350,18 +407,16 @@ local function onUpdateImpl()
 end
 
 -- Filet de sécurité global : quoi qu'il arrive dans onUpdateImpl (bug non
--- encore identifié, cas limite d'un véhicule particulier...), une erreur ne
--- doit jamais pouvoir désactiver toute l'extension et couper les contrôles.
--- Coûte praticité nulle (log seulement en cas d'erreur réelle) et évite de
--- revivre l'incident où un souci de télémétrie a rendu toute l'interface
--- inactive.
+-- encore identifié, cas limite d'un véhicule particulier, API BeamNG qui
+-- change entre versions...), une erreur ne doit jamais pouvoir désactiver
+-- toute l'extension et couper les contrôles. Le log est throttlé : une
+-- erreur systématique par frame (60/s) inonderait la console au lieu
+-- d'informer.
 local lastErrorLogAt = 0
 local function onUpdate()
   local ok, err = pcall(onUpdateImpl)
   if not ok then
     local now = Engine.Platform.getSystemTimeMS()
-    -- Throttle du log : sans ça, une erreur systématique par frame (60/s)
-    -- inonderait la console au lieu d'informer.
     if now - lastErrorLogAt > 3000 then
       lastErrorLogAt = now
       log('E', logTag, 'onUpdate error (récupéré, extension toujours active): ' .. tostring(err))
@@ -370,13 +425,21 @@ local function onUpdate()
 end
 
 local function onInputBindingsChanged(players)
-  for device, player in pairs(players) do
-    for _, client in pairs(clients) do
-      if 'vinput' .. client.deviceInst == device then
-        assignedPlayers[client.deviceInst] = player
-        log('I', logTag, 'device ' .. device .. ' assigned to player ' .. tostring(player))
+  -- Appelé directement par le moteur (pas depuis onUpdate) : pas couvert par
+  -- son pcall, on protège donc celui-ci séparément. `players` vient d'une
+  -- API interne susceptible de changer de forme entre versions de BeamNG.
+  local ok, err = pcall(function()
+    for device, player in pairs(players) do
+      for _, client in pairs(clients) do
+        if 'vinput' .. client.deviceInst == device then
+          assignedPlayers[client.deviceInst] = player
+          log('I', logTag, 'device ' .. device .. ' assigned to player ' .. tostring(player))
+        end
       end
     end
+  end)
+  if not ok then
+    log('W', logTag, 'onInputBindingsChanged: ignoré (' .. tostring(err) .. ')')
   end
 end
 
@@ -391,8 +454,10 @@ local function onExtensionUnloaded()
     udpSocket:close()
     udpSocket = nil
   end
-  for _, client in pairs(clients) do
-    extensions.core_input_virtualInput.deleteDevice(client.deviceInst)
+  if extensions.core_input_virtualInput then
+    for _, client in pairs(clients) do
+      extensions.core_input_virtualInput.deleteDevice(client.deviceInst)
+    end
   end
   clients = {}
   assignedPlayers = {}

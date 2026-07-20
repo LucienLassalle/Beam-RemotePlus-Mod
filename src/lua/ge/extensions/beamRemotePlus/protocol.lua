@@ -159,19 +159,27 @@ function M.decodeControlPacket(data)
   return packet.steering, packet.throttle, packet.brake
 end
 
+-- tonumber(v) or 0 plutôt que d'assigner v directement au champ FFI : si le
+-- jeu expose un jour un electrics.values inattendu (nil, string, table...),
+-- une assignation FFI directe lève une erreur Lua dure au lieu de dégrader
+-- proprement vers "valeur absente" (voir onTelemetry, seul appelant).
+local function n(v)
+  return tonumber(v) or 0
+end
+
 function M.encodeTelemetryPacket(
   speed, rpm, redlineRpm, gear, fuel, engineTemp, lights, shiftLight, oilTemp
 )
   local packet = ffi.new('rp_telemetry_v2_t')
-  packet.speed = speed
-  packet.rpm = rpm
-  packet.redlineRpm = redlineRpm
-  packet.gear = gear
-  packet.fuel = fuel
-  packet.engineTemp = engineTemp
-  packet.lights = lights
-  packet.shiftLight = shiftLight
-  packet.oilTemp = oilTemp or 0
+  packet.speed = n(speed)
+  packet.rpm = n(rpm)
+  packet.redlineRpm = n(redlineRpm)
+  packet.gear = n(gear)
+  packet.fuel = n(fuel)
+  packet.engineTemp = n(engineTemp)
+  packet.lights = n(lights)
+  packet.shiftLight = n(shiftLight)
+  packet.oilTemp = n(oilTemp)
   return ffi.string(packet, ffi.sizeof(packet))
 end
 

@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
 # Empaquette Beam-RemotePlus-Mod/src/ en zip prêt à déployer dans le dossier
-# mods/ de BeamNG.drive. Sortie dans dist/ ET dans ../Package/.
-# Déploie également dans le dossier mods BeamNG local si présent.
+# mods/ de BeamNG.drive. Sortie dans out/ (suivi par Git : n'importe qui peut
+# récupérer la dernière version directement depuis GitHub) ET dans
+# ../Package/ (usage local). Déploie également dans le dossier mods BeamNG
+# local si présent.
 set -euo pipefail
 
 MOD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC_DIR="$MOD_DIR/src"
-DIST_DIR="$MOD_DIR/dist"
+OUT_DIR="$MOD_DIR/out"
 PACKAGE_DIR="$(cd "$MOD_DIR/.." && pwd)/Package"
 BEAMNG_MODS_DIR="$HOME/.local/share/BeamNG/BeamNG.drive/current/mods/repo"
-OUT_ZIP="$DIST_DIR/Beam-RemotePlus.zip"
+OUT_ZIP="$OUT_DIR/Beam-RemotePlus.zip"
 PKG_ZIP="$PACKAGE_DIR/Beam-RemotePlus.zip"
 
-mkdir -p "$DIST_DIR" "$PACKAGE_DIR"
+mkdir -p "$OUT_DIR" "$PACKAGE_DIR"
 rm -f "$OUT_ZIP"
 
 cd "$SRC_DIR"
@@ -20,7 +22,7 @@ zip -r -X "$OUT_ZIP" lua scripts settings mod_info >/dev/null
 
 cp "$OUT_ZIP" "$PKG_ZIP"
 
-echo "Mod compilé: $OUT_ZIP"
+echo "Mod compilé: $OUT_ZIP (à committer/pousser manuellement pour publier sur GitHub)"
 echo "Copié dans:  $PKG_ZIP"
 
 if [[ -d "$BEAMNG_MODS_DIR" ]]; then

@@ -125,7 +125,7 @@ end)
 t.describe('buildTelemetryCallExpression (régression bug %q)', function()
   t.it('quote correctement une IP (ne doit pas lever une erreur au parsing Lua)', function()
     local expr = protocol.buildTelemetryCallExpression(
-      '192.168.1.151', 27.7, 4200, 7000, 2, 0.42, 91.5, 0, 0, 0
+      '192.168.1.151', 27.7, 4200, 7000, 2, 0.42, 91.5, 0, 0, 95.0
     )
     -- Avant le correctif, %s (au lieu de %q) produisait
     -- "onTelemetry(192.168.1.151, ...)" sans guillemets : Lua essayait de
@@ -146,15 +146,17 @@ t.describe('buildTelemetryCallExpression (régression bug %q)', function()
   end)
 
   t.it('capture bien l\'IP en tant que string (et pas un nombre) à l\'exécution', function()
-    local capturedIp, capturedSpeed
+    local capturedIp, capturedSpeed, capturedOilTemp
     local expr = protocol.buildTelemetryCallExpression(
-      '10.0.0.42', 12.5, 3000, 7000, 3, 0.8, 90, 0, 0, 0
+      '10.0.0.42', 12.5, 3000, 7000, 3, 0.8, 90, 0, 0, 85.0
     )
     -- simule extensions.beamRemotePlus_main.onTelemetry pour capturer l'appel
     local env = {
       extensions = {
         beamRemotePlus_main = {
-          onTelemetry = function(ip, speed) capturedIp, capturedSpeed = ip, speed end,
+          onTelemetry = function(ip, speed, rpm, redlineRpm, gear, fuel, engineTemp, lights, shiftLight, oilTemp)
+            capturedIp, capturedSpeed, capturedOilTemp = ip, speed, oilTemp
+          end,
         },
       },
     }
@@ -163,6 +165,7 @@ t.describe('buildTelemetryCallExpression (régression bug %q)', function()
     t.assertEquals(type(capturedIp), 'string')
     t.assertEquals(capturedIp, '10.0.0.42')
     t.assertCloseTo(capturedSpeed, 12.5)
+    t.assertCloseTo(capturedOilTemp, 85.0)
   end)
 end)
 
@@ -279,14 +282,14 @@ t.describe('Commandes (cmd|)', function()
 end)
 
 t.describe('Paquet de télémétrie', function()
-  t.it('encode 36 octets (9 floats)', function()
-    local bytes = protocol.encodeTelemetryPacket(25, 3500, 7000, 2, 0.6, 88.5, 16, 1, 95.2)
+  t.it('encode 36 octets (9 floats, avec oilTemp)', function()
+    local bytes = protocol.encodeTelemetryPacket(25, 3500, 7000, 2, 0.6, 88.5, 16, 1, 95.0)
     t.assertEquals(#bytes, 36)
   end)
 
   t.it('layout little-endian cohérent avec ModTelemetryPacket côté Dart', function()
     local ffi = require('ffi')
-    local bytes = protocol.encodeTelemetryPacket(25, 3500, 7000, 2, 0.6, 88.5, 16, 1, 95.2)
+    local bytes = protocol.encodeTelemetryPacket(25, 3500, 7000, 2, 0.6, 88.5, 16, 1, 95.0)
     local view = ffi.cast('float*', bytes)
     t.assertCloseTo(view[0], 25)    -- speed
     t.assertCloseTo(view[1], 3500)  -- rpm
@@ -295,8 +298,7 @@ t.describe('Paquet de télémétrie', function()
     t.assertCloseTo(view[4], 0.6)   -- fuel
     t.assertCloseTo(view[5], 88.5)  -- engineTemp
     t.assertCloseTo(view[6], 16)    -- lights
-    t.assertCloseTo(view[7], 1)     -- shiftLight
-    t.assertCloseTo(view[8], 95.2)  -- oilTemp
+    t.assertCloseTo(view[8], 95.0)  -- oilTemp
   end)
 
   t.it('oilTemp par défaut à 0 si non fourni', function()
@@ -304,6 +306,19 @@ t.describe('Paquet de télémétrie', function()
     local bytes = protocol.encodeTelemetryPacket(0, 0, 0, 0, 0, 0, 0, 0)
     local view = ffi.cast('float*', bytes)
     t.assertCloseTo(view[8], 0)
+  end)
+
+  t.it('neutralise une valeur non numérique au lieu de lever une erreur FFI', function()
+    -- Régression : avant tonumber(x) or 0, une assignation FFI directe
+    -- d'une valeur non-numérique (nil, string...) levait une erreur Lua
+    -- dure. Un futur electrics.values inattendu ne doit jamais planter.
+    local ffi = require('ffi')
+    local bytes = protocol.encodeTelemetryPacket(nil, 'oops', 7000, 2, 0.6, 88.5, 16, 1, nil)
+    t.assertEquals(#bytes, 36)
+    local view = ffi.cast('float*', bytes)
+    t.assertCloseTo(view[0], 0) -- speed nil -> 0
+    t.assertCloseTo(view[1], 0) -- rpm non numérique -> 0
+    t.assertCloseTo(view[8], 0) -- oilTemp nil -> 0
   end)
 end)
 
