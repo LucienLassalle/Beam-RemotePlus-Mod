@@ -13,7 +13,7 @@
 -- La logique testable (sans dépendance à l'environnement BeamNG) vit dans
 -- protocol.lua ; voir Beam-RemotePlus-Mod/test/ pour les tests unitaires.
 
-local BUILD_TAG = 'devel-13'
+local BUILD_TAG = 'devel-14'
 local logTag = 'beamRemotePlus'
 
 -- Chemin VFS du zip et du fichier trigger de hot-reload.
@@ -76,6 +76,62 @@ local function getSecurityCode()
     return nil
   end
   return tostring(code)
+end
+
+-- Nom lisible du PC renvoyé à l'app lors de la découverte, pour que
+-- l'utilisateur reconnaisse sa machine si plusieurs BeamNG répondent.
+local function getHostLabel()
+  local ok, name = pcall(function() return Steam and Steam.playerName end)
+  if ok and type(name) == 'string' and name ~= '' then
+    return 'BeamNG de ' .. name
+  end
+  return 'BeamNG.drive'
+end
+
+-- Affiche le code d'appairage en jeu. L'UI native "Remote Control" de
+-- BeamNG est cassée depuis la 0.39 (le QR code ne se rend pas), donc sans
+-- ça l'utilisateur n'a aucun moyen de connaître le code s'il n'utilise pas
+-- la connexion automatique de l'app.
+local codeToastShown = false
+local function showCodeToast(force)
+  if codeToastShown and not force then return end
+  local code = getSecurityCode()
+  if not code then return end
+  codeToastShown = true
+  guihooks.trigger('toastrMsg', {
+    type = 'info',
+    title = 'Beam-RemotePlus',
+    msg = 'Code d\'appairage : ' .. code
+      .. '  (ou "Connexion automatique" dans l\'app)',
+    config = { timeOut = 12000 },
+  })
+  log('I', logTag, '[' .. BUILD_TAG .. '] code d\'appairage = ' .. code)
+end
+
+-- Répond à une sonde de découverte diffusée par l'app (sans code) : renvoie
+-- le code d'appairage + le nom du PC. Voir protocol.DISCOVER_MESSAGE.
+local lastDiscoverToastAt = 0
+local function handleDiscover(ip)
+  local code = getSecurityCode()
+  if not code then
+    log('W', logTag, 'discover de ' .. ip .. ' : code indisponible, ignoré')
+    return
+  end
+  local hello = protocol.buildHelloMessage(code, getHostLabel())
+  udpSocket:sendto(hello, ip, protocol.CLIENT_PORT)
+  log('I', logTag, 'discover de ' .. ip .. ' -> hello envoyé (' .. hello .. ')')
+
+  -- Toast throttlé : l'app répète la sonde ~2x/s tant qu'elle n'a pas
+  -- basculé sur le canal de contrôle.
+  local now = Engine.Platform.getSystemTimeMS()
+  if now - lastDiscoverToastAt > 5000 then
+    lastDiscoverToastAt = now
+    guihooks.trigger('toastrMsg', {
+      type = 'info',
+      title = 'Beam-RemotePlus',
+      msg = 'Appairage automatique avec ' .. ip .. '…',
+    })
+  end
 end
 
 local function handlePing(ip, data)
@@ -352,6 +408,14 @@ local function onUpdateImpl()
   end
 
   if not ensureSocket() then return end
+
+  -- Force l'ouverture du socket natif core_remoteController (port 4444) et
+  -- la génération du code dès le premier tick : sans ça, le handshake natif
+  -- ET la découverte du mod ne marchent que si l'utilisateur ouvre le
+  -- panneau Options > ... > Remote Control (qui est justement cassé en
+  -- 0.39). Affiche aussi le code en toast, une seule fois.
+  showCodeToast(false)
+
   local now = Engine.Platform.getSystemTimeMS()
 
   if now - lastHeartbeat > protocol.HEARTBEAT_INTERVAL_MS then
@@ -380,7 +444,9 @@ local function onUpdateImpl()
     local data, ip = udpSocket:receivefrom(64)
     if not data then break end
     local ok, err = pcall(function()
-      if protocol.isPingMessage(data) then
+      if protocol.isDiscoverMessage(data) then
+        handleDiscover(ip)
+      elseif protocol.isPingMessage(data) then
         handlePing(ip, data)
       elseif clients[ip] then
         if protocol.isCmdMessage(data) then

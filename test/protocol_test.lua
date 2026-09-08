@@ -42,6 +42,47 @@ t.describe('Handshake (ping/pong)', function()
   end)
 end)
 
+t.describe('Découverte sans code (discover/hello)', function()
+  t.it('reconnaît le message de découverte exact', function()
+    t.assertTrue(protocol.isDiscoverMessage('beamngremoteplus|discover'))
+  end)
+
+  t.it('rejette tout ce qui n\'est pas exactement le message de découverte', function()
+    t.assertFalse(protocol.isDiscoverMessage('beamngremoteplus|discover|'))
+    t.assertFalse(protocol.isDiscoverMessage('beamngremoteplus|ping|20367'))
+    t.assertFalse(protocol.isDiscoverMessage(''))
+    t.assertFalse(protocol.isDiscoverMessage(nil))
+  end)
+
+  t.it('construit un hello avec code et label', function()
+    t.assertEquals(
+      protocol.buildHelloMessage(20367, 'BeamNG de Loka'),
+      'beamngremoteplus|hello|20367|BeamNG de Loka'
+    )
+  end)
+
+  t.it('label par défaut si absent', function()
+    t.assertEquals(
+      protocol.buildHelloMessage('20367'),
+      'beamngremoteplus|hello|20367|BeamNG.drive'
+    )
+  end)
+
+  t.it('retire les | du label (séparateur de champ)', function()
+    t.assertEquals(
+      protocol.buildHelloMessage('1', 'a|b|c'),
+      'beamngremoteplus|hello|1|a b c'
+    )
+  end)
+
+  t.it('un hello n\'est pas confondu avec un ping/cmd', function()
+    local hello = protocol.buildHelloMessage('20367', 'PC')
+    t.assertFalse(protocol.isPingMessage(hello))
+    t.assertFalse(protocol.isCmdMessage(hello))
+    t.assertFalse(protocol.isDiscoverMessage(hello))
+  end)
+end)
+
 t.describe('Timeout client', function()
   t.it('pas expiré juste après un ping', function()
     t.assertFalse(protocol.isClientTimedOut(1000, 900, 10000))

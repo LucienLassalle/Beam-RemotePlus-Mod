@@ -31,6 +31,15 @@ M.HOST_PORT = 4446   -- le mod écoute ici (ping + contrôle + commandes), côt�
 M.CLIENT_PORT = 4447 -- l'app mobile écoute ici (pong + télémétrie)
 M.PING_PREFIX = 'beamngremoteplus|ping|'
 M.PONG_PREFIX = 'beamngremoteplus|pong|'
+-- Découverte sans code : l'app diffuse DISCOVER_MESSAGE sur HOST_PORT, le
+-- mod répond HELLO_PREFIX..code.."|"..label sur CLIENT_PORT. Sert de
+-- remplacement au scan du QR code natif de BeamNG, cassé depuis la 0.39
+-- (l'UI Vue "Remote Control" plante au rendu du canvas QR). Compromis
+-- assumé : n'importe qui sur le réseau local peut ainsi obtenir le code
+-- d'appairage — équivalent en pratique au brute-force du code à 5 chiffres,
+-- et acceptable sur un LAN domestique. À rendre optionnel si besoin.
+M.DISCOVER_MESSAGE = 'beamngremoteplus|discover'
+M.HELLO_PREFIX = 'beamngremoteplus|hello|'
 M.PROTOCOL_VERSION = '1'
 M.CLIENT_TIMEOUT_MS = 10000
 M.TELEMETRY_INTERVAL_MS = 33 -- ~30Hz
@@ -73,6 +82,17 @@ end
 
 function M.buildPongMessage(code)
   return M.PONG_PREFIX .. tostring(code) .. '|' .. M.PROTOCOL_VERSION
+end
+
+function M.isDiscoverMessage(data)
+  return data == M.DISCOVER_MESSAGE
+end
+
+-- label : nom lisible du PC affiché côté app ("BeamNG de Loka"). Les '|'
+-- sont retirés car ils servent de séparateur de champ dans le message.
+function M.buildHelloMessage(code, label)
+  label = tostring(label or 'BeamNG.drive'):gsub('|', ' ')
+  return M.HELLO_PREFIX .. tostring(code) .. '|' .. label
 end
 
 function M.isClientTimedOut(now, lastSeen, timeoutMs)
