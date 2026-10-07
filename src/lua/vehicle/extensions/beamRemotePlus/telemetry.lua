@@ -52,6 +52,18 @@ local function round(v, decimals)
   return math.floor(v * m + 0.5) / m
 end
 
+-- Manual gearboxes report the gear as a number (-1, 0, 1...), automatic
+-- ones as the label shown by the car ('P', 'D', 'S5'...).
+function M.gearLabel(gear)
+  if type(gear) == 'number' then
+    if gear < 0 then return 'R' end
+    if gear == 0 then return 'N' end
+    return tostring(math.floor(gear))
+  end
+  if gear == nil or gear == '' then return nil end
+  return tostring(gear)
+end
+
 -- e: electrics.values ; extra: { gx, gy, gz, tirePressures, driveMode, envTemp }
 function M.collect(e, extra)
   extra = extra or {}
@@ -61,7 +73,7 @@ function M.collect(e, extra)
     rpm = round(e.rpm, 0),
     maxRpm = round(e.maxrpm, 0),
     idleRpm = round(e.idlerpm, 0),
-    gear = e.gear ~= nil and tostring(e.gear) or nil,
+    gear = M.gearLabel(e.gear),
     gearIndex = finite(e.gearIndex),
     maxGearIndex = finite(e.maxGearIndex),
     gearboxMode = type(e.gearboxMode) == 'string' and e.gearboxMode or nil,
