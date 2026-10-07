@@ -25,6 +25,7 @@ deps:
   getSecurityCode()           -> string or nil
   getHostLabel()              -> string
   getVehicle(player)          -> vehicle or nil
+  listVehicles()              -> radar descriptions of every car (optional)
   switchVehicle(player, dir)  -> ok, err
   cycleCamera(player, offset) -> ok, err
   onDeviceCreated()           optional, forces an input device rescan
@@ -52,6 +53,7 @@ function M.new(deps)
 
   local telemetry = telemetryModule.new({
     getVehicle = deps.getVehicle,
+    listVehicles = deps.listVehicles,
     clock = deps.clock,
     send = send,
   })
@@ -66,7 +68,7 @@ function M.new(deps)
   function self.state()
     local phones = {}
     clients.each(function(ip, client)
-      phones[#phones + 1] = { ip = ip, device = client.deviceName, player = client.player, protocol = client.version }
+      phones[#phones + 1] = { ip = ip, device = client.deviceName, player = client.player, protocol = client.version, display = client.display }
     end)
     return {
       version = M.VERSION,
@@ -173,7 +175,12 @@ function M.new(deps)
   local function handleCommand(client, data)
     local name, arg = protocol.parseCommand(data)
     if not name then return end
-    local ok, err, canonical = commands.execute(client, name, arg)
+    local ok, err, canonical
+    if client.display and name ~= 'debug' then
+      ok, err, canonical = false, 'display_only', name
+    else
+      ok, err, canonical = commands.execute(client, name, arg)
+    end
     if ok then
       log.debug('command ' .. canonical .. (arg and ('|' .. arg) or '') .. ' from ' .. client.ip)
     else
@@ -202,7 +209,7 @@ function M.new(deps)
       log.throttled('size:' .. ip, 5000, 'W', 'unexpected ' .. #data .. '-byte packet from ' .. ip)
       return
     end
-    if deps.input then clients.applyControl(client, steering, throttle, brake) end
+    if deps.input and not client.display then clients.applyControl(client, steering, throttle, brake) end
   end
 
   -- Engine callbacks ----------------------------------------------------------

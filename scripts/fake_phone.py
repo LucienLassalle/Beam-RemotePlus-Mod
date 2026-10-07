@@ -6,7 +6,7 @@ and prints what comes back: which telemetry fields the current vehicle sends
 and the result of every command. Neutral controls are sent (wheel centred,
 pedals released) to keep the session alive.
 
-Usage: scripts/fake_phone.py [host] [--seconds N] [--command NAME[|ARG] ...]
+Usage: scripts/fake_phone.py [host] [--seconds N] [--command NAME[|ARG] ...] [--display]
   host defaults to broadcast discovery on 127.0.0.1 then 255.255.255.255.
 """
 import argparse
@@ -23,6 +23,8 @@ def main():
     parser.add_argument("host", nargs="?")
     parser.add_argument("--seconds", type=float, default=4)
     parser.add_argument("--command", action="append", default=[])
+    parser.add_argument("--display", action="store_true", help="second-screen role (telemetry only)")
+    parser.add_argument("--show", action="append", default=[], help="print only these telemetry fields")
     args = parser.parse_args()
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -51,7 +53,8 @@ def main():
         raise SystemExit("no answer to discovery (is the game running with the mod enabled?)")
 
     # 2. pairing
-    ping = f"beamngremoteplus|ping|{code}|2|fake_phone.py".encode()
+    role = "|display" if args.display else ""
+    ping = f"beamngremoteplus|ping|{code}|2|fake_phone.py{role}".encode()
     version = None
     for _ in range(10):
         sock.sendto(ping, (host, HOST_PORT))
@@ -92,7 +95,9 @@ def main():
             print(msg)
     print(f"{frames} telemetry frames in {args.seconds}s")
     print("fields:", ", ".join(sorted(fields)) or "-")
-    if last_frame:
+    if last_frame and args.show:
+        print(json.dumps({k: last_frame.get(k) for k in args.show}, sort_keys=True))
+    elif last_frame:
         print("last frame:", json.dumps(last_frame, sort_keys=True)[:1500])
 
 

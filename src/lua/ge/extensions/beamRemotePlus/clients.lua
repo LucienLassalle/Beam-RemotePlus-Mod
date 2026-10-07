@@ -42,9 +42,25 @@ function M.new(input, clock)
   -- Returns client, isNew, errorReason.
   function self.connect(ip, ping)
     local client = clients[ip]
+    -- Same phone switching between controller and second-screen roles:
+    -- start a fresh session with the new role.
+    if client and (client.display == true) ~= (ping.role == protocol.ROLE_DISPLAY) then
+      self.disconnect(ip)
+      client = nil
+    end
     if client then
       client.lastSeen = clock()
       return client, false
+    end
+    -- A second-screen phone only reads telemetry: no virtual device (it would
+    -- compete with the player's real wheel), it follows player 0.
+    if ping.role == protocol.ROLE_DISPLAY then
+      client = {
+        ip = ip, deviceName = ping.deviceName or ip, version = protocol.negotiateVersion(ping.version),
+        display = true, state = { 0.5, 0, 0 }, holds = {}, player = 0, debug = false, lastSeen = clock(),
+      }
+      clients[ip] = client
+      return client, true
     end
     if not input then return nil, false, 'virtual_input_unavailable' end
     -- The product name is what Options > Controls displays: with the phone
@@ -83,7 +99,7 @@ function M.new(input, clock)
       if onRelease then pcall(onRelease, client, name) end
     end
     client.holds = {}
-    if input then pcall(input.deleteDevice, client.deviceInst) end
+    if input and client.deviceInst then pcall(input.deleteDevice, client.deviceInst) end
     clients[ip] = nil
     return client
   end
@@ -108,7 +124,7 @@ function M.new(input, clock)
     local changed = {}
     for device, player in pairs(players or {}) do
       for _, client in pairs(clients) do
-        if 'vinput' .. client.deviceInst == device and client.player ~= player then
+        if client.deviceInst and 'vinput' .. client.deviceInst == device and client.player ~= player then
           client.player = player
           changed[#changed + 1] = client
         end
