@@ -9,6 +9,12 @@
 -- the app can tell "value is 0" from "this car has no such sensor" (shown by
 -- the app's debug overlay).
 
+-- Fresh copies of the helper modules when this extension is reloaded.
+package.loaded['extensions/beamRemotePlus/damage'] = nil
+package.loaded['extensions/beamRemotePlus/tyres'] = nil
+local damage = require('extensions/beamRemotePlus/damage')
+local tyres = require('extensions/beamRemotePlus/tyres')
+
 local M = {}
 
 local function finite(v)
@@ -114,7 +120,10 @@ function M.collect(e, extra)
     envTemp = round(extra.envTemp, 1),
     driveMode = extra.driveMode,
     tirePressures = extra.tirePressures,
+    wheelSlip = round(extra.wheelSlip, 2),
+    tyres = extra.tyres,
   }
+  for k, v in pairs(extra.damage or {}) do t[k] = v end
 
   -- Shift light: prefer the vehicle's own shiftLights controller, otherwise
   -- the same rule as the game's dynamic redline gauges (95% of max RPM,
@@ -144,6 +153,30 @@ local function readTirePressures()
   return any and pressures or nil
 end
 
+local function wheelNames()
+  local names = {}
+  for _, wd in pairs(wheels and wheels.wheels or {}) do
+    if wd.name then names[#names + 1] = wd.name end
+  end
+  return names
+end
+
+-- Largest slip velocity among the wheels (m/s): drives the phone's
+-- haptic feedback (wheelspin, locked wheels, drifting).
+local function maxWheelSlip()
+  local maxSlip
+  for _, wd in pairs(wheels and wheels.wheels or {}) do
+    local slip = tonumber(wd.lastSlip)
+    if slip and slip == slip then maxSlip = math.max(maxSlip or 0, math.abs(slip)) end
+  end
+  return maxSlip
+end
+
+local function readDamage()
+  if not (damageTracker and damageTracker.getDamage) then return nil end
+  return damage.collect(damageTracker.getDamage, wheelNames())
+end
+
 local function readDriveMode()
   local driveModes = controller and controller.getController and controller.getController('driveModes')
   if not driveModes then return nil end
@@ -153,7 +186,12 @@ local function readDriveMode()
   return { key = tostring(key), name = data.name and tostring(data.name) or tostring(key) }
 end
 
+function M.onExtensionLoaded()
+  if gui then tyres.install(gui) end
+end
+
 function M.send()
+  if gui then tyres.install(gui) end
   local ok, err = pcall(function()
     if not (electrics and electrics.values) then return end
     local extra = {
@@ -162,6 +200,9 @@ function M.send()
       gz = sensors and sensors.gz2,
       envTemp = obj.getEnvTemperature and (obj:getEnvTemperature() - 273.15) or nil,
       tirePressures = readTirePressures(),
+      wheelSlip = maxWheelSlip(),
+      damage = readDamage(),
+      tyres = tyres.read(),
       driveMode = readDriveMode(),
     }
     local t = M.collect(electrics.values, extra)

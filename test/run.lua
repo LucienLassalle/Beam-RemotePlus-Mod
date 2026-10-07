@@ -6,7 +6,8 @@ local testDir = arg[0]:match('(.*/)') or './'
 local srcDir = testDir .. '../src/'
 -- Modules require each other with their in-game absolute path
 -- ('/lua/ge/extensions/beamRemotePlus/x'), resolved here against src/.
-package.path = srcDir .. '?.lua;' .. testDir .. '?.lua;' .. package.path
+-- Vehicle-side modules use the game's vehicle path (lua/vehicle/?.lua).
+package.path = srcDir .. '?.lua;' .. srcDir .. 'lua/vehicle/?.lua;' .. testDir .. '?.lua;' .. package.path
 
 local suites = {}
 local listing = io.popen('ls "' .. testDir .. '"')
