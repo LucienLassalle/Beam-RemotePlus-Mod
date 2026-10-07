@@ -1,0 +1,200 @@
+local t = require('minitest')
+local fakes = require('fakes')
+local serverModule = require('/lua/ge/extensions/beamRemotePlus/server')
+local configModule = require('/lua/ge/extensions/beamRemotePlus/config')
+local i18nModule = require('/lua/ge/extensions/beamRemotePlus/i18n')
+local protocol = require('/lua/ge/extensions/beamRemotePlus/protocol')
+
+local CODE = '20367'
+
+local function setup(opts)
+  opts = opts or {}
+  local env = {
+    transport = fakes.transport(),
+    input = fakes.input(),
+    clock = fakes.clock(),
+    files = fakes.memoryFiles(opts.files),
+    toasts = {},
+    states = {},
+    vehicle = fakes.vehicle(11),
+    rescans = 0,
+  }
+  env.transport.failOpen = opts.portBusy
+  local config = configModule.new(env.files)
+  config.load()
+  local logger, logLines = fakes.logger()
+  env.logLines = logLines.lines
+  env.server = serverModule.new({
+    transport = env.transport,
+    input = env.input,
+    config = config,
+    i18n = i18nModule.new(nil),
+    logger = logger,
+    clock = env.clock.fn,
+    notify = function(text, kind) env.toasts[#env.toasts + 1] = { text = text, kind = kind } end,
+    publishState = function(state) env.states[#env.states + 1] = state end,
+    getSecurityCode = function() if opts.noCode then return nil end return CODE end,
+    getHostLabel = function() return 'BeamNG of Test' end,
+    getVehicle = function() return env.vehicle end,
+    switchVehicle = function() return true end,
+    cycleCamera = function() return true end,
+    onDeviceCreated = function() env.rescans = env.rescans + 1 end,
+  })
+  return env
+end
+
+local function connect(env, ip, version)
+  env.transport.push(protocol.buildPingMessage(CODE, version or 2, 'Pixel'), ip or '10.0.0.2')
+  env.server.update()
+end
+
+t.describe('server: enable switch', function()
+  t.it('listens by default on the first frame', function()
+    local env = setup()
+    env.server.update()
+    t.assertTrue(env.server.isListening())
+    t.assertTrue(env.transport.opened)
+  end)
+  t.it('shows the pairing code once', function()
+    local env = setup()
+    env.server.update()
+    env.server.update()
+    local codeToasts = 0
+    for _, toast in ipairs(env.toasts) do if toast.text:find(CODE, 1, true) then codeToasts = codeToasts + 1 end end
+    t.assertEquals(codeToasts, 1)
+  end)
+  t.it('stays closed when disabled in the saved settings', function()
+    local env = setup({ files = { [configModule.FILE_PATH] = { enabled = false } } })
+    env.server.update()
+    t.assertFalse(env.server.isListening())
+  end)
+  t.it('disabling drops phones, releases holds and closes the port', function()
+    local env = setup()
+    connect(env)
+    env.transport.push('cmd|horn|1', '10.0.0.2')
+    env.server.update()
+    env.server.setEnabled(false)
+    t.assertFalse(env.transport.opened)
+    t.assertEquals(env.server.clients.count(), 0)
+    t.assertContains(env.vehicle.commands[#env.vehicle.commands], 'electrics.horn(false)')
+    t.assertFalse(env.files.files[configModule.FILE_PATH].enabled)
+  end)
+  t.it('re-enabling listens again', function()
+    local env = setup({ files = { [configModule.FILE_PATH] = { enabled = false } } })
+    env.server.setEnabled(true)
+    t.assertTrue(env.server.isListening())
+  end)
+  t.it('retries quietly when the port is busy', function()
+    local env = setup({ portBusy = true })
+    env.server.update()
+    env.server.update()
+    t.assertFalse(env.server.isListening())
+  end)
+end)
+
+t.describe('server: pairing', function()
+  t.it('answers discovery with code and label', function()
+    local env = setup()
+    env.transport.push(protocol.DISCOVER_MESSAGE, '10.0.0.9')
+    env.server.update()
+    t.assertEquals(env.transport.lastTo('10.0.0.9'), 'beamngremoteplus|hello|20367|BeamNG of Test')
+  end)
+  t.it('ignores discovery when no code is available', function()
+    local env = setup({ noCode = true })
+    env.transport.push(protocol.DISCOVER_MESSAGE, '10.0.0.9')
+    env.server.update()
+    t.assertNil(env.transport.lastTo('10.0.0.9'))
+  end)
+  t.it('connects a v2 phone, answers pong v2 and rescans devices', function()
+    local env = setup()
+    connect(env)
+    t.assertEquals(env.transport.lastTo('10.0.0.2'), 'beamngremoteplus|pong|20367|2')
+    t.assertEquals(env.server.clients.count(), 1)
+    t.assertEquals(env.rescans, 1)
+    t.assertEquals(env.states[#env.states].phones[1].device, 'Pixel')
+  end)
+  t.it('keeps old apps working with pong v1', function()
+    local env = setup()
+    env.transport.push('beamngremoteplus|ping|' .. CODE, '10.0.0.3')
+    env.server.update()
+    t.assertEquals(env.transport.lastTo('10.0.0.3'), 'beamngremoteplus|pong|20367|1')
+  end)
+  t.it('rejects a wrong code', function()
+    local env = setup()
+    env.transport.push('beamngremoteplus|ping|11111|2', '10.0.0.4')
+    env.server.update()
+    t.assertEquals(env.server.clients.count(), 0)
+  end)
+  t.it('ignores control packets from unpaired phones', function()
+    local env = setup()
+    env.transport.push(protocol.encodeControlPacket(0.5, 1, 0), '10.0.0.5')
+    env.server.update()
+    t.assertEquals(#env.input.emitted, 0)
+  end)
+end)
+
+t.describe('server: control and commands', function()
+  t.it('forwards the analog axes to the virtual device', function()
+    local env = setup()
+    connect(env)
+    env.transport.push(protocol.encodeControlPacket(0.5, 0.8, 0), '10.0.0.2')
+    env.server.update()
+    t.assertCloseTo(env.input.emitted[2].value, 0.8)
+  end)
+  t.it('always reports failed commands to v2 phones', function()
+    local env = setup()
+    connect(env)
+    env.transport.push('cmd|fly', '10.0.0.2')
+    env.server.update()
+    t.assertContains(env.transport.lastTo('10.0.0.2'), '"error":"unknown_command"')
+  end)
+  t.it('acknowledges successes only in debug mode', function()
+    local env = setup()
+    connect(env)
+    env.transport.push('cmd|hazard', '10.0.0.2')
+    env.server.update()
+    t.assertEquals(env.transport.lastTo('10.0.0.2'), 'beamngremoteplus|pong|20367|2')
+    env.transport.push('cmd|debug|1', '10.0.0.2')
+    env.transport.push('cmd|hazard', '10.0.0.2')
+    env.server.update()
+    t.assertContains(env.transport.lastTo('10.0.0.2'), '"cmd":"hazard","ok":true')
+  end)
+  t.it('sends a session message when debug is enabled', function()
+    local env = setup()
+    connect(env)
+    env.transport.push('cmd|debug|1', '10.0.0.2')
+    env.server.update()
+    local found = false
+    for _, s in ipairs(env.transport.sent) do if s.payload:find('"type":"session"', 1, true) then found = true end end
+    t.assertTrue(found)
+  end)
+  t.it('one crashing packet does not stop the queue', function()
+    local env = setup()
+    connect(env)
+    env.vehicle = nil -- getVehicle now returns nil
+    env.transport.push('cmd|horn|1', '10.0.0.2')
+    env.transport.push(protocol.encodeControlPacket(0.5, 1, 0), '10.0.0.2')
+    env.server.update()
+    t.assertCloseTo(env.input.emitted[#env.input.emitted - 1].value, 1)
+  end)
+end)
+
+t.describe('server: timeouts and players', function()
+  t.it('disconnects silent phones and tells the player', function()
+    local env = setup()
+    connect(env)
+    env.clock.advance(protocol.CLIENT_TIMEOUT_MS + 1)
+    env.server.update()
+    t.assertEquals(env.server.clients.count(), 0)
+    t.assertContains(env.toasts[#env.toasts].text, 'Pixel')
+  end)
+  t.it('assigns players and routes telemetry to the right phone', function()
+    local env = setup()
+    connect(env)
+    local client = env.server.clients.get('10.0.0.2')
+    env.server.onInputBindingsChanged({ ['vinput' .. client.deviceInst] = 0 })
+    env.server.update()
+    t.assertEquals(env.server.onTelemetry(11, { rpm = 1234 }), 1)
+    t.assertContains(env.transport.lastTo('10.0.0.2'), '"rpm":1234')
+  end)
+end)
