@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
-# Lance les tests unitaires du mod (logique pure, sans BeamNG.drive).
+# Runs the mod unit tests (pure Lua, no BeamNG.drive needed).
 set -euo pipefail
 
 MOD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if ! command -v luajit >/dev/null 2>&1; then
-  echo "Erreur: luajit introuvable." >&2
+  echo "error: luajit not found (BeamNG runs LuaJIT 2.1, use the same)." >&2
   exit 1
 fi
 
-cd "$MOD_DIR"
-luajit test/protocol_test.lua
+luajit "$MOD_DIR/test/run.lua"
