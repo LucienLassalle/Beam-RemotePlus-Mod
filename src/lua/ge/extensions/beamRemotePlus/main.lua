@@ -131,6 +131,7 @@ end
 local function setEnabled(enabled) if server then server.setEnabled(enabled) end end
 local function toggleEnabled() if server then server.setEnabled(not server.isEnabled()) end end
 local function setDebug(enabled) if server then server.setDebug(enabled) end end
+local function toggleDebug() if server then server.setDebug(not server.state().debug) end end
 local function requestState()
   if server then guihooks.trigger('BeamRemotePlusState', server.state()) end
 end
@@ -143,6 +144,7 @@ M.onTelemetry = onTelemetry
 M.setEnabled = setEnabled
 M.toggleEnabled = toggleEnabled
 M.setDebug = setDebug
+M.toggleDebug = toggleDebug
 M.requestState = requestState
 
 return M
