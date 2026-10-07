@@ -1,10 +1,10 @@
 {
   "title": "Beam-RemotePlus",
-  "version_string": "1.1",
-  "tag_line": "Mobile remote control with rich telemetry and vehicle switching",
+  "version_string": "2.0.0",
+  "tag_line": "Drive with your phone: analog pedals, rich telemetry, dashboards, local multiplayer",
   "username": "LucienLassalle",
   "tagid": "BRNPLUS001",
   "filename": "Beam-RemotePlus.zip",
-  "message": "Extension complementaire pour l'application mobile Beam-RemotePlus (successeur de BeamRemote).\n\nFonctionnalites :\n- Telemetrie fiable : RPM, vitesse, rapport engage, carburant, temperature\n- Pedales analogiques (throttle/frein progressifs)\n- Changement de vehicule depuis le telephone\n- Compatibilite complete avec le QR code natif (aucune configuration supplementaire)\n\nInstallation : deposer le ZIP dans le dossier mods/ de BeamNG.drive, puis activer depuis le gestionnaire de mods.",
-  "via": "local build"
+  "message": "Companion mod of the Beam-RemotePlus Android app (successor of the official BeamNG remote control app).\n\nFeatures:\n- Automatic pairing on the local network (no QR code needed)\n- Analog steering, throttle and brake\n- Rich telemetry for phone dashboards (speed, RPM, gear, temperatures, warning lights, g-forces, tyre pressures...)\n- Horn, high beams, hazards, indicators, lights, parking brake, starter, ESC mode, cruise control\n- Vehicle switching, camera, gears and recovery from the phone\n- Local multiplayer: one phone per player\n- Translated in English and French\n\nThe mod is active as soon as it is enabled in the mod manager. Phone connections can be switched off with the \"Enable Beam-RemotePlus\" action (Options > Controls > General) or the Beam-RemotePlus UI app.\n\nAndroid app and source code: https://github.com/LucienLassalle/Beam-RemotePlus-Mobile",
+  "via": "github"
 }
