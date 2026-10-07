@@ -27,8 +27,10 @@ Thanks for helping! Issues and pull requests are welcome in **English or French*
 | `.../protocol.lua`, `json.lua` | Wire format (see [docs/PROTOCOL.md](docs/PROTOCOL.md)). |
 | `.../clients.lua` | Connected phones and their virtual input devices. |
 | `.../commands.lua` | Command table (horn, lights, cruise control...). |
+| `.../radar.lua` | Cars around the followed vehicle, in its frame. |
 | `.../telemetry.lua` | Requests vehicle snapshots and sends them to phones. |
 | `src/lua/vehicle/extensions/beamRemotePlus/telemetry.lua` | Runs inside the vehicle, collects the data. |
+| `.../damage.lua`, `tyres.lua` | Damage summary, optional Tyre Thermals and Wear integration. |
 | `.../config.lua`, `i18n.lua`, `logger.lua` | Settings file, translations, logs. |
 | `src/lua/ge/extensions/core/input/actions/beamRemotePlus.json` | "Enable Beam-RemotePlus" action in Options > Controls. |
 | `src/ui/modules/apps/BeamRemotePlus/` | Optional in-game UI app. |
@@ -55,5 +57,16 @@ same keys.
 scripts/deploy_local.sh   # builds, copies into the user mods folder, hot-reloads
 ```
 
-Then watch `beamng.log` in the BeamNG user folder (lines tagged `beamRemotePlus`).
-Enable verbose logs with the "Beam-RemotePlus debug mode" action or the UI app.
+`deploy_local.sh` finds the Proton prefix of the Steam game automatically
+(pass the user folder otherwise). Then check the mod end to end without the
+app:
+
+```bash
+scripts/fake_phone.py --show rpm --show radar --show tyres
+scripts/fake_phone.py --command hazard --command hazard   # prints the acks
+scripts/fake_phone.py --display                          # second-screen role
+```
+
+and watch `beamng.log` in the BeamNG user folder (lines tagged
+`beamRemotePlus`). Enable verbose logs with the "Beam-RemotePlus debug mode"
+action or the UI app.

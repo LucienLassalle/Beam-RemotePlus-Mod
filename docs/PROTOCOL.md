@@ -23,7 +23,7 @@ PC    → phone:4447       beamngremoteplus|hello|<code>|<label>
 ## 2. Pairing (ping / pong)
 
 ```
-phone → PC:4446   beamngremoteplus|ping|<code>|<version>|<device name>
+phone → PC:4446   beamngremoteplus|ping|<code>|<version>|<device name>[|display]
 PC    → phone     beamngremoteplus|pong|<code>|<negotiated version>
 ```
 
@@ -31,7 +31,12 @@ PC    → phone     beamngremoteplus|pong|<code>|<negotiated version>
   only send `beamngremoteplus|ping|<code>`.
 - The negotiated version is `min(app, mod)`. With version 1 the mod sends
   the legacy binary telemetry (section 5).
-- The phone pings every 500 ms until it receives the pong. Once paired, any
+- `display` (optional): **second screen**. The phone gets the telemetry of
+  player 1 but no virtual input device, its control packets are ignored and
+  every command except `debug` is refused with `display_only`. A phone that
+  changes role starts a new session.
+- The phone pings every 500 ms until it receives the pong, then every 2 s:
+  if the mod restarted and forgot the phone, the ping re-creates the session. Once paired, any
   packet (the 60 Hz control packets) keeps the session alive; a phone silent
   for **10 s** is disconnected.
 
@@ -111,6 +116,12 @@ provide it (show "n/a", do not assume 0).
 | `shiftLight` | bool |
 | `tirePressures` | object `{ "FL": kPa, "FR": kPa, ... }` |
 | `driveMode` | object `{ "key": "...", "name": "..." }` |
+| `wheelSlip` | largest wheel slip velocity, m/s |
+| `bodyDamage` | `{ "FL": 0..1, "FR", "ML", "MR", "RL", "RR" }`, omitted when intact |
+| `engineDamage` | array of failures: `radiatorLeak`, `oilpanLeak`, `coolantOverheating`, `engineLockedUp`... |
+| `flatTires`, `hotBrakes` | arrays of wheel names |
+| `tyres` | `{ "FL": { "temp", "working", "condition", "brake", "surface"?, "core"? } }` (°C, condition % left), only with the *Tyre Thermals and Wear* mod |
+| `radar` | array of the 12 nearest cars within 50 m, nearest first: `{ "x": m right, "y": m ahead, "heading": ° relative, "length", "width" }` (`[]` when nobody is around) |
 | `player` | player index (0-based) |
 | `vehicle` | vehicle model (`scintilla`, `bolide`...) |
 
@@ -121,7 +132,7 @@ debug mode.
 {"type":"ack","cmd":"horn|1","ok":false,"error":"no_vehicle"}
 ```
 
-Errors: `unknown_command`, `bad_argument`, `no_vehicle`,
+Errors: `unknown_command`, `bad_argument`, `no_vehicle`, `display_only`,
 `unavailable:<feature>`.
 
 **`session`**: sent when the player is assigned and when debug mode is
