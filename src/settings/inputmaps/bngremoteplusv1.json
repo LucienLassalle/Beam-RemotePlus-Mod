@@ -1,6 +1,6 @@
 {
   "name": "Beam-RemotePlus",
-  "notes": "Contrôleur virtuel créé par le mod Beam-RemotePlus : 3 axes analogiques (direction, accélération, frein) et 2 boutons (montée/descente de rapport pour boîte manuelle). Passthrough direct sans courbe de réponse.",
+  "notes": "Virtual controller created by the Beam-RemotePlus mod for each connected phone: 3 analog axes (steering, throttle, brake) and 2 buttons (gear up/down). Direct passthrough, no response curve.",
   "bindings": [
     {"control": "xaxis",   "action": "steering"},
     {"control": "yaxis",   "action": "accelerate"},

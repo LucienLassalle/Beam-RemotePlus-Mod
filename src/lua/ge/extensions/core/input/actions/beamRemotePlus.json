@@ -1,0 +1,4 @@
+{
+"beamRemotePlus_toggle"      :{"cat":"general", "order": 90, "ctx": "tlua", "onDown":"if extensions.beamRemotePlus_main then extensions.beamRemotePlus_main.toggleEnabled() end", "title": "ui.inputActions.beamRemotePlus.toggle.title", "desc": "ui.inputActions.beamRemotePlus.toggle.description" },
+"beamRemotePlus_toggleDebug" :{"cat":"general", "order": 91, "ctx": "tlua", "onDown":"if extensions.beamRemotePlus_main then extensions.beamRemotePlus_main.toggleDebug() end", "title": "ui.inputActions.beamRemotePlus.toggleDebug.title", "desc": "ui.inputActions.beamRemotePlus.toggleDebug.description" }
+}

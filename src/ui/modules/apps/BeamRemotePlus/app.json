@@ -1,0 +1,13 @@
+{
+  "domElement": "<beam-remote-plus></beam-remote-plus>",
+  "name": "beamRemotePlus.app.name",
+  "types": ["ui.apps.categories.vehicle_control"],
+  "description": "beamRemotePlus.app.description",
+  "css": { "left": "20px", "top": "300px", "width": "260px", "height": "170px" },
+  "author": "LucienLassalle",
+  "version": "2.0",
+  "directive": "beamRemotePlus",
+  "category": "Utility",
+  "isAuxiliary": false,
+  "interactive": "yes"
+}
