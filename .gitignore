@@ -1,0 +1,10 @@
+# Build output (published as GitHub release assets, never committed)
+out/
+dist/
+*.zip
+
+# Editor / OS noise
+.vscode/
+.idea/
+*.swp
+.DS_Store
