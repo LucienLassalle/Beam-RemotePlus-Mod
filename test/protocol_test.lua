@@ -1,366 +1,164 @@
-#!/usr/bin/env luajit
--- Tests unitaires du protocole Beam-RemotePlus, exécutables directement :
---   luajit test/protocol_test.lua
--- (depuis Beam-RemotePlus-Mod/). N'exigent pas BeamNG.drive : protocol.lua
--- est un module pur (seule dépendance : la FFI de LuaJIT, identique à
--- celle utilisée par le jeu).
-
-local scriptDir = arg[0]:match('(.*/)') or './'
-package.path = scriptDir .. '?.lua;' .. scriptDir .. '../src/lua/ge/extensions/beamRemotePlus/?.lua;' .. package.path
-
 local t = require('minitest')
-local protocol = require('protocol')
+local protocol = require('/lua/ge/extensions/beamRemotePlus/protocol')
+local ffi = require('ffi')
 
-t.describe('Handshake (ping/pong)', function()
-  t.it('reconnaît un message ping', function()
-    t.assertTrue(protocol.isPingMessage('beamngremoteplus|ping|20367'))
-  end)
-
-  t.it('rejette un message qui ne commence pas par le préfixe ping', function()
-    t.assertFalse(protocol.isPingMessage('beamng|20367'))
-    t.assertFalse(protocol.isPingMessage(''))
-  end)
-
-  t.it('construit un message ping avec le bon code', function()
-    t.assertEquals(protocol.buildPingMessage(20367), 'beamngremoteplus|ping|20367')
-  end)
-
-  t.it('valide un ping correspondant au code attendu', function()
-    t.assertTrue(protocol.pingMatchesCode('beamngremoteplus|ping|20367', '20367'))
-  end)
-
-  t.it('rejette un ping avec un code différent', function()
-    t.assertFalse(protocol.pingMatchesCode('beamngremoteplus|ping|99999', '20367'))
-  end)
-
-  t.it('rejette un ping quand aucun code n\'est disponible', function()
-    t.assertFalse(protocol.pingMatchesCode('beamngremoteplus|ping|20367', nil))
-  end)
-
-  t.it('construit un pong avec code et version', function()
-    t.assertEquals(protocol.buildPongMessage('20367'), 'beamngremoteplus|pong|20367|1')
-  end)
-end)
-
-t.describe('Découverte sans code (discover/hello)', function()
-  t.it('reconnaît le message de découverte exact', function()
+t.describe('protocol: discover / hello', function()
+  t.it('recognises only the exact discover message', function()
     t.assertTrue(protocol.isDiscoverMessage('beamngremoteplus|discover'))
-  end)
-
-  t.it('rejette tout ce qui n\'est pas exactement le message de découverte', function()
     t.assertFalse(protocol.isDiscoverMessage('beamngremoteplus|discover|'))
-    t.assertFalse(protocol.isDiscoverMessage('beamngremoteplus|ping|20367'))
-    t.assertFalse(protocol.isDiscoverMessage(''))
     t.assertFalse(protocol.isDiscoverMessage(nil))
   end)
-
-  t.it('construit un hello avec code et label', function()
-    t.assertEquals(
-      protocol.buildHelloMessage(20367, 'BeamNG de Loka'),
-      'beamngremoteplus|hello|20367|BeamNG de Loka'
-    )
+  t.it('builds a hello with code and label', function()
+    t.assertEquals(protocol.buildHelloMessage(20367, 'BeamNG of Loka'), 'beamngremoteplus|hello|20367|BeamNG of Loka')
   end)
-
-  t.it('label par défaut si absent', function()
-    t.assertEquals(
-      protocol.buildHelloMessage('20367'),
-      'beamngremoteplus|hello|20367|BeamNG.drive'
-    )
-  end)
-
-  t.it('retire les | du label (séparateur de champ)', function()
-    t.assertEquals(
-      protocol.buildHelloMessage('1', 'a|b|c'),
-      'beamngremoteplus|hello|1|a b c'
-    )
-  end)
-
-  t.it('un hello n\'est pas confondu avec un ping/cmd', function()
-    local hello = protocol.buildHelloMessage('20367', 'PC')
-    t.assertFalse(protocol.isPingMessage(hello))
-    t.assertFalse(protocol.isCmdMessage(hello))
-    t.assertFalse(protocol.isDiscoverMessage(hello))
+  t.it('uses a default label and strips field separators', function()
+    t.assertEquals(protocol.buildHelloMessage('1'), 'beamngremoteplus|hello|1|BeamNG.drive')
+    t.assertEquals(protocol.buildHelloMessage('1', 'a|b'), 'beamngremoteplus|hello|1|a b')
   end)
 end)
 
-t.describe('Timeout client', function()
-  t.it('pas expiré juste après un ping', function()
+t.describe('protocol: ping / pong', function()
+  t.it('parses a v1 ping (code only) as protocol 1', function()
+    local ping = protocol.parsePing('beamngremoteplus|ping|20367')
+    t.assertEquals(ping.code, '20367')
+    t.assertEquals(ping.version, 1)
+    t.assertNil(ping.deviceName)
+  end)
+  t.it('parses a v2 ping with version and device name', function()
+    local ping = protocol.parsePing('beamngremoteplus|ping|20367|2|Pixel 8')
+    t.assertEquals(ping.version, 2)
+    t.assertEquals(ping.deviceName, 'Pixel 8')
+  end)
+  t.it('rejects a ping without code', function()
+    t.assertNil(protocol.parsePing('beamngremoteplus|ping|'))
+    t.assertNil(protocol.parsePing('beamng|20367'))
+  end)
+  t.it('round-trips buildPingMessage / parsePing', function()
+    local ping = protocol.parsePing(protocol.buildPingMessage(42, 2, 'a|b'))
+    t.assertEquals(ping.code, '42')
+    t.assertEquals(ping.deviceName, 'a b')
+  end)
+  t.it('matches the pairing code', function()
+    t.assertTrue(protocol.pingMatchesCode('beamngremoteplus|ping|20367|2|x', '20367'))
+    t.assertFalse(protocol.pingMatchesCode('beamngremoteplus|ping|99999', '20367'))
+    t.assertFalse(protocol.pingMatchesCode('beamngremoteplus|ping|20367', nil))
+  end)
+  t.it('negotiates the lowest common version', function()
+    t.assertEquals(protocol.negotiateVersion(1), 1)
+    t.assertEquals(protocol.negotiateVersion(2), 2)
+    t.assertEquals(protocol.negotiateVersion(99), protocol.PROTOCOL_VERSION)
+    t.assertEquals(protocol.negotiateVersion(nil), 1)
+  end)
+  t.it('builds a pong carrying the negotiated version', function()
+    t.assertEquals(protocol.buildPongMessage('20367', 1), 'beamngremoteplus|pong|20367|1')
+    t.assertEquals(protocol.buildPongMessage('20367'), 'beamngremoteplus|pong|20367|2')
+  end)
+end)
+
+t.describe('protocol: commands', function()
+  t.it('parses a command without argument', function()
+    local name, arg = protocol.parseCommand('cmd|next_vehicle')
+    t.assertEquals(name, 'next_vehicle')
+    t.assertNil(arg)
+  end)
+  t.it('parses a command with argument', function()
+    local name, arg = protocol.parseCommand('cmd|horn|1')
+    t.assertEquals(name, 'horn')
+    t.assertEquals(arg, '1')
+  end)
+  t.it('rejects non commands and empty names', function()
+    t.assertNil(protocol.parseCommand('beamngremoteplus|ping|1'))
+    t.assertNil(protocol.parseCommand('cmd|'))
+  end)
+  t.it('builds commands', function()
+    t.assertEquals(protocol.buildCommand('horn', 1), 'cmd|horn|1')
+    t.assertEquals(protocol.buildCommand('hazard'), 'cmd|hazard')
+  end)
+  t.it('a binary control packet can never look like a command', function()
+    t.assertFalse(protocol.isCmdMessage(protocol.encodeControlPacket(1, 1, 1)))
+  end)
+end)
+
+t.describe('protocol: control packet', function()
+  t.it('round-trips encode / decode', function()
+    local s, th, b = protocol.decodeControlPacket(protocol.encodeControlPacket(0.25, 0.5, 0.75))
+    t.assertCloseTo(s, 0.25)
+    t.assertCloseTo(th, 0.5)
+    t.assertCloseTo(b, 0.75)
+  end)
+  t.it('rejects a packet of the wrong size', function()
+    t.assertNil(protocol.decodeControlPacket('abc'))
+    t.assertNil(protocol.decodeControlPacket(nil))
+  end)
+  t.it('is little-endian like the Dart side', function()
+    local bytes = protocol.encodeControlPacket(1, 0, 0)
+    t.assertEquals(bytes:byte(4), 0x3F)
+    t.assertEquals(bytes:byte(3), 0x80)
+  end)
+  t.it('clamps values and neutralises NaN', function()
+    t.assertEquals(protocol.clampUnit(-1), 0)
+    t.assertEquals(protocol.clampUnit(2), 1)
+    t.assertEquals(protocol.clampUnit(0 / 0), 0)
+    t.assertEquals(protocol.clampUnit('x'), 0)
+  end)
+end)
+
+t.describe('protocol: legacy v1 telemetry', function()
+  local function decode(bytes)
+    local p = ffi.new('rp_telemetry_v2_t')
+    ffi.copy(p, bytes, 36)
+    return p
+  end
+  t.it('encodes 36 bytes', function()
+    t.assertEquals(#protocol.encodeLegacyTelemetry({}), 36)
+  end)
+  t.it('maps the normalized telemetry to the v1 layout', function()
+    local p = decode(protocol.encodeLegacyTelemetry({
+      speed = 10, rpm = 3000, maxRpm = 7000, gearIndex = 2, fuel = 0.5,
+      waterTemp = 90, oilTemp = 100, shiftLight = true, lowBeam = true, tcsActive = true,
+    }))
+    t.assertCloseTo(p.speed, 10)
+    t.assertCloseTo(p.redlineRpm, 7000)
+    t.assertCloseTo(p.gear, 3)
+    t.assertCloseTo(p.engineTemp, 90)
+    t.assertCloseTo(p.shiftLight, 1)
+    t.assertCloseTo(p.lights, 1 + 128)
+    t.assertCloseTo(p.oilTemp, 100)
+  end)
+  t.it('neutral is the default gear when the index is missing', function()
+    t.assertCloseTo(decode(protocol.encodeLegacyTelemetry({})).gear, 0)
+    t.assertEquals(protocol.gearFromIndex(0), 1)
+    t.assertEquals(protocol.gearFromIndex(-1), 0)
+  end)
+  t.it('never fails on non-numeric values', function()
+    t.assertCloseTo(decode(protocol.encodeLegacyTelemetry({ speed = 'x', rpm = 0 / 0 })).speed, 0)
+  end)
+  t.it('computes the lights bitmask', function()
+    t.assertEquals(protocol.computeLightsBitmask({}), 0)
+    t.assertEquals(protocol.computeLightsBitmask({ highBeam = true, signalLeft = true, absActive = true }), 2 + 8 + 64)
+  end)
+end)
+
+t.describe('protocol: v2 JSON messages', function()
+  t.it('tags telemetry with its type', function()
+    t.assertEquals(protocol.buildTelemetryMessage({ rpm = 1000 }), '{"rpm":1000,"type":"telemetry"}')
+  end)
+  t.it('builds acks with and without error', function()
+    t.assertEquals(protocol.buildAckMessage('horn|1', true), '{"cmd":"horn|1","ok":true,"type":"ack"}')
+    t.assertEquals(protocol.buildAckMessage('x', false, 'unknown_command'),
+      '{"cmd":"x","error":"unknown_command","ok":false,"type":"ack"}')
+  end)
+  t.it('builds session messages', function()
+    t.assertEquals(protocol.buildSessionMessage({ player = 1 }), '{"player":1,"type":"session"}')
+  end)
+end)
+
+t.describe('protocol: timeouts', function()
+  t.it('is not expired right after being seen', function()
     t.assertFalse(protocol.isClientTimedOut(1000, 900, 10000))
   end)
-
-  t.it('expiré après le délai', function()
-    t.assertTrue(protocol.isClientTimedOut(20000, 1000, 10000))
-  end)
-
-  t.it('traite lastSeen nil comme "jamais vu" (donc expiré)', function()
+  t.it('expires after the timeout and treats nil as never seen', function()
+    t.assertTrue(protocol.isClientTimedOut(20001, 10000, 10000))
     t.assertTrue(protocol.isClientTimedOut(20000, nil, 10000))
   end)
 end)
-
-t.describe('Utilitaires', function()
-  t.it('clampUnit borne à [0,1]', function()
-    t.assertEquals(protocol.clampUnit(-0.5), 0)
-    t.assertEquals(protocol.clampUnit(1.5), 1)
-    t.assertEquals(protocol.clampUnit(0.42), 0.42)
-  end)
-
-  t.it('gearFromIndex applique le même décalage que le protocole natif', function()
-    t.assertEquals(protocol.gearFromIndex(-1), 0) -- marche arrière
-    t.assertEquals(protocol.gearFromIndex(0), 1)  -- point mort
-    t.assertEquals(protocol.gearFromIndex(3), 4)  -- 3e rapport
-    t.assertEquals(protocol.gearFromIndex(nil), 0)
-  end)
-end)
-
-t.describe('computeLightsBitmask', function()
-  t.it('retourne 0 sans aucun feu actif', function()
-    t.assertEquals(protocol.computeLightsBitmask({}), 0)
-  end)
-
-  t.it('détecte les feux de croisement seuls', function()
-    t.assertEquals(
-      protocol.computeLightsBitmask({ lowbeam = 1 }),
-      protocol.LIGHT_BIT_LOW_BEAM
-    )
-  end)
-
-  t.it('cumule plusieurs feux actifs', function()
-    local mask = protocol.computeLightsBitmask({
-      lowbeam = 1,
-      signal_R = 1,
-      hasABS = true,
-      absActive = 1,
-    })
-    t.assertEquals(
-      mask,
-      protocol.LIGHT_BIT_LOW_BEAM + protocol.LIGHT_BIT_SIGNAL_RIGHT + protocol.LIGHT_BIT_ABS
-    )
-  end)
-
-  t.it('ABS ignoré si le véhicule n\'en a pas (hasABS false)', function()
-    t.assertEquals(
-      protocol.computeLightsBitmask({ hasABS = false, absActive = 1 }),
-      0
-    )
-  end)
-
-  t.it('frein à main ignoré si valeur à 0', function()
-    t.assertEquals(protocol.computeLightsBitmask({ parkingbrake = 0 }), 0)
-  end)
-
-  t.it('détecte le TC actif', function()
-    t.assertEquals(
-      protocol.computeLightsBitmask({ hasTCS = true, tcsActive = 1 }),
-      protocol.LIGHT_BIT_TC
-    )
-  end)
-
-  t.it('TC ignoré si le véhicule n\'en a pas (hasTCS false)', function()
-    t.assertEquals(
-      protocol.computeLightsBitmask({ hasTCS = false, tcsActive = 1 }),
-      0
-    )
-  end)
-end)
-
-t.describe('buildTelemetryCallExpression (régression bug %q)', function()
-  t.it('quote correctement une IP (ne doit pas lever une erreur au parsing Lua)', function()
-    local expr = protocol.buildTelemetryCallExpression(
-      '192.168.1.151', 27.7, 4200, 7000, 2, 0.42, 91.5, 0, 0, 95.0
-    )
-    -- Avant le correctif, %s (au lieu de %q) produisait
-    -- "onTelemetry(192.168.1.151, ...)" sans guillemets : Lua essayait de
-    -- lire 192.168.1.151 comme un nombre et levait
-    -- "malformed number near '192.168.1.151'". load() doit réussir.
-    local chunk, err = load('return function() ' .. expr .. ' end')
-    t.assertNotNil(chunk, 'load() a échoué : ' .. tostring(err))
-  end)
-
-  t.it('contient l\'IP entourée de guillemets dans le texte généré', function()
-    local expr = protocol.buildTelemetryCallExpression(
-      '192.168.1.151', 0, 0, 0, 0, 0, 0, 0, 0, 0
-    )
-    t.assertTrue(
-      expr:find('"192.168.1.151"', 1, true) ~= nil,
-      'IP non quotée trouvée dans: ' .. expr
-    )
-  end)
-
-  t.it('capture bien l\'IP en tant que string (et pas un nombre) à l\'exécution', function()
-    local capturedIp, capturedSpeed, capturedOilTemp
-    local expr = protocol.buildTelemetryCallExpression(
-      '10.0.0.42', 12.5, 3000, 7000, 3, 0.8, 90, 0, 0, 85.0
-    )
-    -- simule extensions.beamRemotePlus_main.onTelemetry pour capturer l'appel
-    local env = {
-      extensions = {
-        beamRemotePlus_main = {
-          onTelemetry = function(ip, speed, rpm, redlineRpm, gear, fuel, engineTemp, lights, shiftLight, oilTemp)
-            capturedIp, capturedSpeed, capturedOilTemp = ip, speed, oilTemp
-          end,
-        },
-      },
-    }
-    local chunk = load(expr, 'test', 't', env)
-    chunk()
-    t.assertEquals(type(capturedIp), 'string')
-    t.assertEquals(capturedIp, '10.0.0.42')
-    t.assertCloseTo(capturedSpeed, 12.5)
-    t.assertCloseTo(capturedOilTemp, 85.0)
-  end)
-end)
-
-t.describe('Paquet de contrôle (steering/throttle/brake)', function()
-  t.it('round-trip encode puis decode', function()
-    local bytes = protocol.encodeControlPacket(0.3, 0.8, 0.1)
-    t.assertEquals(#bytes, 12)
-    local steering, throttle, brake = protocol.decodeControlPacket(bytes)
-    t.assertCloseTo(steering, 0.3)
-    t.assertCloseTo(throttle, 0.8)
-    t.assertCloseTo(brake, 0.1)
-  end)
-
-  t.it('refuse un paquet de taille incorrecte', function()
-    t.assertNil(protocol.decodeControlPacket('trop court'))
-  end)
-
-  t.it('encode en little-endian (identique à ce qu\'attend l\'app Dart)', function()
-    local bytes = protocol.encodeControlPacket(1.0, 0.0, 0.0)
-    -- 1.0 en float32 little-endian = 00 00 80 3F
-    local b = { bytes:byte(1, 4) }
-    t.assertEquals(b[1], 0x00)
-    t.assertEquals(b[2], 0x00)
-    t.assertEquals(b[3], 0x80)
-    t.assertEquals(b[4], 0x3F)
-  end)
-end)
-
-t.describe('Commandes (cmd|)', function()
-  t.it('reconnaît un message cmd', function()
-    t.assertTrue(protocol.isCmdMessage('cmd|next_vehicle'))
-    t.assertTrue(protocol.isCmdMessage('cmd|prev_vehicle'))
-  end)
-
-  t.it('rejette un non-cmd', function()
-    t.assertFalse(protocol.isCmdMessage('beamng|next'))
-    t.assertFalse(protocol.isCmdMessage(''))
-    t.assertFalse(protocol.isCmdMessage(nil))
-  end)
-
-  t.it('les constantes CMD_NEXT et CMD_PREV sont correctement préfixées', function()
-    t.assertTrue(protocol.isCmdMessage(protocol.CMD_NEXT_VEHICLE))
-    t.assertTrue(protocol.isCmdMessage(protocol.CMD_PREV_VEHICLE))
-  end)
-
-  t.it('CMD_NEXT_VEHICLE vaut exactement cmd|next_vehicle', function()
-    t.assertEquals(protocol.CMD_NEXT_VEHICLE, 'cmd|next_vehicle')
-  end)
-
-  t.it('CMD_PREV_VEHICLE vaut exactement cmd|prev_vehicle', function()
-    t.assertEquals(protocol.CMD_PREV_VEHICLE, 'cmd|prev_vehicle')
-  end)
-
-  t.it('une commande connue n\'est pas aussi un ping', function()
-    t.assertFalse(protocol.isPingMessage(protocol.CMD_NEXT_VEHICLE))
-  end)
-
-  t.it('CMD_CAM_NEXT vaut exactement cmd|cam_next', function()
-    t.assertEquals(protocol.CMD_CAM_NEXT, 'cmd|cam_next')
-  end)
-
-  t.it('CMD_CAM_PREV vaut exactement cmd|cam_prev', function()
-    t.assertEquals(protocol.CMD_CAM_PREV, 'cmd|cam_prev')
-  end)
-
-  t.it('les commandes caméra sont reconnues comme cmd', function()
-    t.assertTrue(protocol.isCmdMessage(protocol.CMD_CAM_NEXT))
-    t.assertTrue(protocol.isCmdMessage(protocol.CMD_CAM_PREV))
-  end)
-
-  t.it('CMD_GEAR_UP vaut exactement cmd|gear_up', function()
-    t.assertEquals(protocol.CMD_GEAR_UP, 'cmd|gear_up')
-  end)
-
-  t.it('CMD_GEAR_DOWN vaut exactement cmd|gear_down', function()
-    t.assertEquals(protocol.CMD_GEAR_DOWN, 'cmd|gear_down')
-  end)
-
-  t.it('les commandes gear sont reconnues comme cmd', function()
-    t.assertTrue(protocol.isCmdMessage(protocol.CMD_GEAR_UP))
-    t.assertTrue(protocol.isCmdMessage(protocol.CMD_GEAR_DOWN))
-  end)
-
-  t.it('CMD_RECOVER_START vaut exactement cmd|recover_start', function()
-    t.assertEquals(protocol.CMD_RECOVER_START, 'cmd|recover_start')
-  end)
-
-  t.it('CMD_RECOVER_STOP vaut exactement cmd|recover_stop', function()
-    t.assertEquals(protocol.CMD_RECOVER_STOP, 'cmd|recover_stop')
-  end)
-
-  t.it('les commandes recover sont reconnues comme cmd', function()
-    t.assertTrue(protocol.isCmdMessage(protocol.CMD_RECOVER_START))
-    t.assertTrue(protocol.isCmdMessage(protocol.CMD_RECOVER_STOP))
-  end)
-
-  t.it('toutes les commandes sont distinctes', function()
-    local cmds = {
-      protocol.CMD_NEXT_VEHICLE,
-      protocol.CMD_PREV_VEHICLE,
-      protocol.CMD_CAM_NEXT,
-      protocol.CMD_CAM_PREV,
-      protocol.CMD_GEAR_UP,
-      protocol.CMD_GEAR_DOWN,
-      protocol.CMD_RECOVER_START,
-      protocol.CMD_RECOVER_STOP,
-    }
-    for i = 1, #cmds do
-      for j = i + 1, #cmds do
-        t.assertTrue(cmds[i] ~= cmds[j], 'collision: ' .. cmds[i] .. ' == ' .. cmds[j])
-      end
-    end
-  end)
-end)
-
-t.describe('Paquet de télémétrie', function()
-  t.it('encode 36 octets (9 floats, avec oilTemp)', function()
-    local bytes = protocol.encodeTelemetryPacket(25, 3500, 7000, 2, 0.6, 88.5, 16, 1, 95.0)
-    t.assertEquals(#bytes, 36)
-  end)
-
-  t.it('layout little-endian cohérent avec ModTelemetryPacket côté Dart', function()
-    local ffi = require('ffi')
-    local bytes = protocol.encodeTelemetryPacket(25, 3500, 7000, 2, 0.6, 88.5, 16, 1, 95.0)
-    local view = ffi.cast('float*', bytes)
-    t.assertCloseTo(view[0], 25)    -- speed
-    t.assertCloseTo(view[1], 3500)  -- rpm
-    t.assertCloseTo(view[2], 7000)  -- redlineRpm
-    t.assertCloseTo(view[3], 2)     -- gear
-    t.assertCloseTo(view[4], 0.6)   -- fuel
-    t.assertCloseTo(view[5], 88.5)  -- engineTemp
-    t.assertCloseTo(view[6], 16)    -- lights
-    t.assertCloseTo(view[8], 95.0)  -- oilTemp
-  end)
-
-  t.it('oilTemp par défaut à 0 si non fourni', function()
-    local ffi = require('ffi')
-    local bytes = protocol.encodeTelemetryPacket(0, 0, 0, 0, 0, 0, 0, 0)
-    local view = ffi.cast('float*', bytes)
-    t.assertCloseTo(view[8], 0)
-  end)
-
-  t.it('neutralise une valeur non numérique au lieu de lever une erreur FFI', function()
-    -- Régression : avant tonumber(x) or 0, une assignation FFI directe
-    -- d'une valeur non-numérique (nil, string...) levait une erreur Lua
-    -- dure. Un futur electrics.values inattendu ne doit jamais planter.
-    local ffi = require('ffi')
-    local bytes = protocol.encodeTelemetryPacket(nil, 'oops', 7000, 2, 0.6, 88.5, 16, 1, nil)
-    t.assertEquals(#bytes, 36)
-    local view = ffi.cast('float*', bytes)
-    t.assertCloseTo(view[0], 0) -- speed nil -> 0
-    t.assertCloseTo(view[1], 0) -- rpm non numérique -> 0
-    t.assertCloseTo(view[8], 0) -- oilTemp nil -> 0
-  end)
-end)
-
-t.summary()

@@ -1,23 +1,23 @@
--- Logique pure du protocole Beam-RemotePlus, sans aucune dépendance aux
--- globales spécifiques à BeamNG (extensions, log, socket...), pour rester
--- testable avec un luajit autonome (voir Beam-RemotePlus-Mod/test/).
+-- Pure Beam-RemotePlus wire protocol: no dependency on BeamNG globals, so it
+-- can be unit-tested with a standalone luajit (see test/).
+--
+-- Wire summary (all UDP, see docs/PROTOCOL.md for the full specification):
+--   app -> mod (HOST_PORT)  : discover probe, ping, 12-byte control packet,
+--                             text commands ("cmd|<name>[|<arg>]")
+--   mod -> app (CLIENT_PORT): hello, pong, telemetry, command acks
+--
+-- Protocol versions:
+--   1: binary 36-byte telemetry, no command acks (apps <= 1.x)
+--   2: JSON telemetry + JSON events (acks, session info)
 
 local ffi = require('ffi')
+local json = require('/lua/ge/extensions/beamRemotePlus/json')
 
--- ffi.cdef enregistre les types dans un espace de noms C GLOBAL au
--- processus (pas par état Lua) : si ce module est rechargé (désactivation
--- puis réactivation du mod dans le gestionnaire, ou hot-reload dev), un
--- second appel avec les mêmes noms de types lève une erreur. On l'ignore :
--- elle signifie normalement juste que les types sont déjà enregistrés
--- depuis un chargement précédent AVEC LE MÊME LAYOUT.
---
--- ATTENTION (bug vécu) : si la DISPOSITION d'un struct change (champ
--- ajouté/retiré) sans changer son NOM, ce pcall avale aussi l'erreur de
--- redéfinition — le VIEUX type reste actif en mémoire, et tout code qui
--- lit/écrit un champ absent de l'ancien layout plante (et peut faire
--- tomber toute l'extension, donc les contrôles). RÈGLE : toute modification
--- de la disposition d'un struct FFI ici DOIT s'accompagner d'un changement
--- de son nom (ex: _v2 -> _v3), jamais d'une simple édition sur place.
+-- ffi.cdef registers types in a process-wide C namespace (not per Lua
+-- state): reloading this module would raise a redefinition error, which we
+-- swallow. RULE: any layout change of a struct below MUST come with a new
+-- type name (e.g. _v2 -> _v3), otherwise the stale layout silently stays
+-- active after a reload.
 pcall(function()
   ffi.cdef[[
   typedef struct { float steering, throttle, brake; } rp_control_t;
@@ -27,141 +27,122 @@ end)
 
 local M = {}
 
-M.HOST_PORT = 4446   -- le mod écoute ici (ping + contrôle + commandes), côté PC
-M.CLIENT_PORT = 4447 -- l'app mobile écoute ici (pong + télémétrie)
+M.HOST_PORT = 4446
+M.CLIENT_PORT = 4447
+
+M.PROTOCOL_VERSION = 2
+M.LEGACY_PROTOCOL_VERSION = 1
+
 M.PING_PREFIX = 'beamngremoteplus|ping|'
 M.PONG_PREFIX = 'beamngremoteplus|pong|'
--- Découverte sans code : l'app diffuse DISCOVER_MESSAGE sur HOST_PORT, le
--- mod répond HELLO_PREFIX..code.."|"..label sur CLIENT_PORT. Sert de
--- remplacement au scan du QR code natif de BeamNG, cassé depuis la 0.39
--- (l'UI Vue "Remote Control" plante au rendu du canvas QR). Compromis
--- assumé : n'importe qui sur le réseau local peut ainsi obtenir le code
--- d'appairage — équivalent en pratique au brute-force du code à 5 chiffres,
--- et acceptable sur un LAN domestique. À rendre optionnel si besoin.
 M.DISCOVER_MESSAGE = 'beamngremoteplus|discover'
 M.HELLO_PREFIX = 'beamngremoteplus|hello|'
-M.PROTOCOL_VERSION = '1'
+M.CMD_PREFIX = 'cmd|'
+
+M.CONTROL_PACKET_SIZE = 12
+M.MAX_DATAGRAM_SIZE = 512
+
 M.CLIENT_TIMEOUT_MS = 10000
-M.TELEMETRY_INTERVAL_MS = 33 -- ~30Hz
+M.TELEMETRY_INTERVAL_MS = 33 -- ~30 Hz
 M.HEARTBEAT_INTERVAL_MS = 5000
 
--- Commandes textuelles envoyées par l'app (préfixe 'cmd|').
--- Distinguables des paquets de contrôle binaires (12 octets exactement).
-M.CMD_PREFIX       = 'cmd|'
-M.CMD_NEXT_VEHICLE = 'cmd|next_vehicle'
-M.CMD_PREV_VEHICLE = 'cmd|prev_vehicle'
-M.CMD_CAM_NEXT     = 'cmd|cam_next'
-M.CMD_CAM_PREV     = 'cmd|cam_prev'
-M.CMD_GEAR_UP      = 'cmd|gear_up'
-M.CMD_GEAR_DOWN    = 'cmd|gear_down'
--- Répliquent le comportement du bouton "Insert" (recover_vehicle) natif :
--- onDown démarre le rembobinage vers l'historique de positions, onUp fige
--- le véhicule au point atteint. Un appui bref = petite correction (quasi
--- sur place), un appui long = récupération plus loin dans l'historique,
--- exactement comme maintenir la touche sur PC (voir
--- lua/ge/extensions/core/input/actions/gameplay.json:6 côté jeu).
-M.CMD_RECOVER_START = 'cmd|recover_start'
-M.CMD_RECOVER_STOP  = 'cmd|recover_stop'
-
-function M.isPingMessage(data)
-  return data ~= nil and data:sub(1, #M.PING_PREFIX) == M.PING_PREFIX
+local function startsWith(s, prefix)
+  return type(s) == 'string' and s:sub(1, #prefix) == prefix
 end
 
-function M.isCmdMessage(data)
-  return data ~= nil and data:sub(1, #M.CMD_PREFIX) == M.CMD_PREFIX
+-- Splits on '|' keeping empty fields ("a||b" -> {"a", "", "b"}).
+function M.splitFields(s)
+  local fields = {}
+  for field in (s .. '|'):gmatch('([^|]*)|') do
+    fields[#fields + 1] = field
+  end
+  return fields
 end
 
-function M.buildPingMessage(code)
-  return M.PING_PREFIX .. tostring(code)
-end
-
-function M.pingMatchesCode(data, code)
-  if code == nil then return false end
-  return data == M.buildPingMessage(code)
-end
-
-function M.buildPongMessage(code)
-  return M.PONG_PREFIX .. tostring(code) .. '|' .. M.PROTOCOL_VERSION
-end
+-- Handshake ---------------------------------------------------------------
 
 function M.isDiscoverMessage(data)
   return data == M.DISCOVER_MESSAGE
 end
 
--- label : nom lisible du PC affiché côté app ("BeamNG de Loka"). Les '|'
--- sont retirés car ils servent de séparateur de champ dans le message.
+function M.isPingMessage(data)
+  return startsWith(data, M.PING_PREFIX)
+end
+
+function M.isCmdMessage(data)
+  return startsWith(data, M.CMD_PREFIX)
+end
+
+function M.buildPingMessage(code, version, deviceName)
+  local msg = M.PING_PREFIX .. tostring(code)
+  if version then
+    msg = msg .. '|' .. tostring(version)
+    if deviceName then msg = msg .. '|' .. tostring(deviceName):gsub('|', ' ') end
+  end
+  return msg
+end
+
+-- Returns { code, version, deviceName } or nil. Apps speaking protocol 1
+-- only send the code, so a missing version means 1.
+function M.parsePing(data)
+  if not M.isPingMessage(data) then return nil end
+  local fields = M.splitFields(data:sub(#M.PING_PREFIX + 1))
+  local code = fields[1]
+  if not code or code == '' then return nil end
+  local version = tonumber(fields[2]) or M.LEGACY_PROTOCOL_VERSION
+  local deviceName = fields[3]
+  if deviceName == '' then deviceName = nil end
+  return { code = code, version = version, deviceName = deviceName }
+end
+
+function M.pingMatchesCode(data, code)
+  if code == nil then return false end
+  local ping = M.parsePing(data)
+  return ping ~= nil and ping.code == tostring(code)
+end
+
+-- The negotiated version is the lowest common one, so a newer app keeps
+-- working with an older mod and vice versa.
+function M.negotiateVersion(clientVersion)
+  return math.min(tonumber(clientVersion) or M.LEGACY_PROTOCOL_VERSION, M.PROTOCOL_VERSION)
+end
+
+function M.buildPongMessage(code, version)
+  return M.PONG_PREFIX .. tostring(code) .. '|' .. tostring(version or M.PROTOCOL_VERSION)
+end
+
+-- label: human readable PC name shown by the app when several PCs answer.
 function M.buildHelloMessage(code, label)
   label = tostring(label or 'BeamNG.drive'):gsub('|', ' ')
   return M.HELLO_PREFIX .. tostring(code) .. '|' .. label
 end
 
-function M.isClientTimedOut(now, lastSeen, timeoutMs)
-  timeoutMs = timeoutMs or M.CLIENT_TIMEOUT_MS
-  return (now - (lastSeen or 0)) > timeoutMs
+-- Commands ----------------------------------------------------------------
+
+-- "cmd|horn|1" -> "horn", "1" ; "cmd|next_vehicle" -> "next_vehicle", nil
+function M.parseCommand(data)
+  if not M.isCmdMessage(data) then return nil end
+  local fields = M.splitFields(data:sub(#M.CMD_PREFIX + 1))
+  local name = fields[1]
+  if not name or name == '' then return nil end
+  local arg = fields[2]
+  if arg == '' then arg = nil end
+  return name, arg
 end
 
+function M.buildCommand(name, arg)
+  if arg == nil then return M.CMD_PREFIX .. name end
+  return M.CMD_PREFIX .. name .. '|' .. tostring(arg)
+end
+
+-- Control packet ----------------------------------------------------------
+
 function M.clampUnit(v)
+  v = tonumber(v) or 0
+  if v ~= v then return 0 end -- NaN
   if v < 0 then return 0 end
   if v > 1 then return 1 end
   return v
-end
-
-function M.gearFromIndex(gearIndex)
-  return (gearIndex or -1) + 1
-end
-
--- Bits de la télémétrie : mêmes significations que les DL_x du protocole
--- OutGauge natif (voir lua/vehicle/protocols/outgauge.lua), pour rester
--- cohérent avec l'existant même si le layout binaire diffère.
-M.LIGHT_BIT_LOW_BEAM = 1
-M.LIGHT_BIT_HIGH_BEAM = 2
-M.LIGHT_BIT_HANDBRAKE = 4
-M.LIGHT_BIT_SIGNAL_LEFT = 8
-M.LIGHT_BIT_SIGNAL_RIGHT = 16
-M.LIGHT_BIT_OIL_WARNING = 32
-M.LIGHT_BIT_ABS = 64
-M.LIGHT_BIT_TC = 128
-
--- electrics: table simple {lowbeam=, highbeam=, parkingbrake=, signal_L=,
--- signal_R=, oil=, hasABS=, absActive=, hasTCS=, tcsActive=}, reflétant
--- electrics.values côté véhicule.
-function M.computeLightsBitmask(electrics)
-  local lights = 0
-  if electrics.lowbeam == 1 then lights = lights + M.LIGHT_BIT_LOW_BEAM end
-  if electrics.highbeam == 1 then lights = lights + M.LIGHT_BIT_HIGH_BEAM end
-  if electrics.parkingbrake and electrics.parkingbrake > 0 then
-    lights = lights + M.LIGHT_BIT_HANDBRAKE
-  end
-  if electrics.signal_L and electrics.signal_L ~= 0 then
-    lights = lights + M.LIGHT_BIT_SIGNAL_LEFT
-  end
-  if electrics.signal_R and electrics.signal_R ~= 0 then
-    lights = lights + M.LIGHT_BIT_SIGNAL_RIGHT
-  end
-  if electrics.oil and electrics.oil ~= 0 then
-    lights = lights + M.LIGHT_BIT_OIL_WARNING
-  end
-  if electrics.hasABS and electrics.absActive and electrics.absActive ~= 0 then
-    lights = lights + M.LIGHT_BIT_ABS
-  end
-  if electrics.hasTCS and electrics.tcsActive and electrics.tcsActive ~= 0 then
-    lights = lights + M.LIGHT_BIT_TC
-  end
-  return lights
-end
-
--- Construit l'expression Lua (sous forme de texte) à exécuter côté GE via
--- obj:queueGameEngineLua() pour transmettre la télémétrie. L'IP DOIT être
--- sérialisée avec %q (guillemets + échappement) et non %s : une IP comme
--- "192.168.1.151" non quotée serait interprétée par Lua comme un nombre
--- malformé (bug historique corrigé ici, voir test associé).
-function M.buildTelemetryCallExpression(
-  ip, speed, rpm, redlineRpm, gear, fuel, engineTemp, lights, shiftLight, oilTemp
-)
-  return string.format(
-    'extensions.beamRemotePlus_main.onTelemetry(%q, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
-    ip, speed, rpm, redlineRpm, gear, fuel, engineTemp, lights, shiftLight, oilTemp
-  )
 end
 
 function M.encodeControlPacket(steering, throttle, brake)
@@ -173,34 +154,89 @@ function M.encodeControlPacket(steering, throttle, brake)
 end
 
 function M.decodeControlPacket(data)
-  if #data ~= 12 then return nil end
+  if type(data) ~= 'string' or #data ~= M.CONTROL_PACKET_SIZE then return nil end
   local packet = ffi.new('rp_control_t')
-  ffi.copy(packet, data, 12)
+  ffi.copy(packet, data, M.CONTROL_PACKET_SIZE)
   return packet.steering, packet.throttle, packet.brake
 end
 
--- tonumber(v) or 0 plutôt que d'assigner v directement au champ FFI : si le
--- jeu expose un jour un electrics.values inattendu (nil, string, table...),
--- une assignation FFI directe lève une erreur Lua dure au lieu de dégrader
--- proprement vers "valeur absente" (voir onTelemetry, seul appelant).
-local function n(v)
-  return tonumber(v) or 0
+-- Legacy (v1) binary telemetry ----------------------------------------------
+
+M.LIGHT_BIT_LOW_BEAM = 1
+M.LIGHT_BIT_HIGH_BEAM = 2
+M.LIGHT_BIT_HANDBRAKE = 4
+M.LIGHT_BIT_SIGNAL_LEFT = 8
+M.LIGHT_BIT_SIGNAL_RIGHT = 16
+M.LIGHT_BIT_OIL_WARNING = 32
+M.LIGHT_BIT_ABS = 64
+M.LIGHT_BIT_TC = 128
+
+local function num(v)
+  v = tonumber(v)
+  if v == nil or v ~= v or v == math.huge or v == -math.huge then return 0 end
+  return v
 end
 
-function M.encodeTelemetryPacket(
-  speed, rpm, redlineRpm, gear, fuel, engineTemp, lights, shiftLight, oilTemp
-)
+-- Native gear convention: 0 = R, 1 = N, 2+ = engaged gear + 1.
+function M.gearFromIndex(gearIndex)
+  return (tonumber(gearIndex) or -1) + 1
+end
+
+-- t: normalized telemetry table (see telemetry.lua / vehicle extension).
+function M.computeLightsBitmask(t)
+  local lights = 0
+  if t.lowBeam then lights = lights + M.LIGHT_BIT_LOW_BEAM end
+  if t.highBeam then lights = lights + M.LIGHT_BIT_HIGH_BEAM end
+  if t.parkingBrake then lights = lights + M.LIGHT_BIT_HANDBRAKE end
+  if t.signalLeft then lights = lights + M.LIGHT_BIT_SIGNAL_LEFT end
+  if t.signalRight then lights = lights + M.LIGHT_BIT_SIGNAL_RIGHT end
+  if t.lowPressure then lights = lights + M.LIGHT_BIT_OIL_WARNING end
+  if t.absActive then lights = lights + M.LIGHT_BIT_ABS end
+  if t.tcsActive then lights = lights + M.LIGHT_BIT_TC end
+  return lights
+end
+
+function M.encodeLegacyTelemetry(t)
   local packet = ffi.new('rp_telemetry_v2_t')
-  packet.speed = n(speed)
-  packet.rpm = n(rpm)
-  packet.redlineRpm = n(redlineRpm)
-  packet.gear = n(gear)
-  packet.fuel = n(fuel)
-  packet.engineTemp = n(engineTemp)
-  packet.lights = n(lights)
-  packet.shiftLight = n(shiftLight)
-  packet.oilTemp = n(oilTemp)
+  packet.speed = num(t.speed)
+  packet.rpm = num(t.rpm)
+  packet.redlineRpm = num(t.maxRpm)
+  packet.gear = M.gearFromIndex(t.gearIndex)
+  packet.fuel = num(t.fuel)
+  packet.engineTemp = num(t.waterTemp)
+  packet.lights = M.computeLightsBitmask(t)
+  packet.shiftLight = t.shiftLight and 1 or 0
+  packet.oilTemp = num(t.oilTemp)
   return ffi.string(packet, ffi.sizeof(packet))
+end
+
+-- v2 JSON messages ------------------------------------------------------------
+
+-- Every v2 message is a JSON object with a "type" field so the app can route
+-- it; unknown types must be ignored by the app (forward compatibility).
+function M.buildTelemetryMessage(t)
+  local msg = { type = 'telemetry' }
+  for k, v in pairs(t) do msg[k] = v end
+  return json.encode(msg)
+end
+
+-- error: short machine-readable reason (e.g. "no_vehicle"), shown verbatim
+-- by the app's debug overlay.
+function M.buildAckMessage(command, ok, error)
+  return json.encode({ type = 'ack', cmd = command, ok = ok and true or false, error = error })
+end
+
+function M.buildSessionMessage(info)
+  local msg = { type = 'session' }
+  for k, v in pairs(info) do msg[k] = v end
+  return json.encode(msg)
+end
+
+-- Timeouts ------------------------------------------------------------------
+
+function M.isClientTimedOut(now, lastSeen, timeoutMs)
+  timeoutMs = timeoutMs or M.CLIENT_TIMEOUT_MS
+  return (now - (lastSeen or 0)) > timeoutMs
 end
 
 return M
