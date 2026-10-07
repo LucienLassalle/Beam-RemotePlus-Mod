@@ -1,36 +1,35 @@
 #!/usr/bin/env bash
-# Empaquette Beam-RemotePlus-Mod/src/ en zip prêt à déployer dans le dossier
-# mods/ de BeamNG.drive. Sortie dans out/ (suivi par Git : n'importe qui peut
-# récupérer la dernière version directement depuis GitHub) ET dans
-# ../Package/ (usage local). Déploie également dans le dossier mods BeamNG
-# local si présent.
+# Packages src/ into dist/Beam-RemotePlus.zip, ready for BeamNG's mods/ folder.
+#
+# Usage: scripts/build_mod.sh [version]
+#   version (e.g. 2.1.0, a leading "v" is stripped) is written into
+#   mod_info/*/info.json and server.lua; without it the sources are packaged
+#   as they are. The archive is reproducible: fixed timestamps, sorted entries.
 set -euo pipefail
 
 MOD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SRC_DIR="$MOD_DIR/src"
-OUT_DIR="$MOD_DIR/out"
-PACKAGE_DIR="$(cd "$MOD_DIR/.." && pwd)/Package"
-BEAMNG_MODS_DIR="$HOME/.local/share/BeamNG/BeamNG.drive/current/mods/repo"
-OUT_ZIP="$OUT_DIR/Beam-RemotePlus.zip"
-PKG_ZIP="$PACKAGE_DIR/Beam-RemotePlus.zip"
+DIST_DIR="$MOD_DIR/dist"
+STAGE_DIR="$DIST_DIR/stage"
+OUT_ZIP="$DIST_DIR/Beam-RemotePlus.zip"
+VERSION="${1:-}"
+VERSION="${VERSION#v}"
 
-mkdir -p "$OUT_DIR" "$PACKAGE_DIR"
-rm -f "$OUT_ZIP"
+mkdir -p "$DIST_DIR"
+rm -rf "$STAGE_DIR" "$OUT_ZIP"
+cp -r "$MOD_DIR/src" "$STAGE_DIR"
 
-cd "$SRC_DIR"
-zip -r -X "$OUT_ZIP" lua scripts settings mod_info >/dev/null
-
-cp "$OUT_ZIP" "$PKG_ZIP"
-
-echo "Mod compilé: $OUT_ZIP (à committer/pousser manuellement pour publier sur GitHub)"
-echo "Copié dans:  $PKG_ZIP"
-
-if [[ -d "$BEAMNG_MODS_DIR" ]]; then
-  cp "$OUT_ZIP" "$BEAMNG_MODS_DIR/Beam-RemotePlus.zip"
-  echo "Déployé:     $BEAMNG_MODS_DIR/Beam-RemotePlus.zip"
-  # Crée le trigger de hot-reload : si BeamNG tourne déjà avec le mod actif,
-  # l'extension le détecte dans les 3 s et recharge automatiquement le zip
-  # sans passer par le gestionnaire de mods (désactiver/réactiver).
-  touch "$BEAMNG_MODS_DIR/Beam-RemotePlus-reload.trigger"
-  echo "Trigger:     $BEAMNG_MODS_DIR/Beam-RemotePlus-reload.trigger"
+if [[ -n "$VERSION" ]]; then
+  if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$ ]]; then
+    echo "error: '$VERSION' is not a semantic version" >&2
+    exit 1
+  fi
+  sed -i -E "s/\"version_string\": \"[^\"]*\"/\"version_string\": \"$VERSION\"/" "$STAGE_DIR"/mod_info/*/info.json
+  sed -i -E "s/^M\.VERSION = '[^']*'/M.VERSION = '$VERSION'/" "$STAGE_DIR/lua/ge/extensions/beamRemotePlus/server.lua"
 fi
+
+# Fixed mtime (2020-01-01) so identical sources give a byte-identical zip.
+find "$STAGE_DIR" -exec touch -h -d '2020-01-01T00:00:00Z' {} +
+(cd "$STAGE_DIR" && find . -type f | sed 's|^\./||' | LC_ALL=C sort | zip -X -q -9 "$OUT_ZIP" -@)
+rm -rf "$STAGE_DIR"
+
+echo "Built $OUT_ZIP ($(du -h "$OUT_ZIP" | cut -f1))"
