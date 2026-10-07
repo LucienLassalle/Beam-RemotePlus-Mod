@@ -6,7 +6,7 @@
 
 local MODULE_DIR = '/lua/ge/extensions/beamRemotePlus/'
 local SIBLINGS = { 'json', 'protocol', 'config', 'i18n', 'logger', 'clients',
-  'commands', 'telemetry', 'transport', 'server', 'devReload' }
+  'commands', 'radar', 'telemetry', 'transport', 'server', 'devReload' }
 
 -- require() caches by path independently of extensions.reload(): without
 -- this, reloading the mod would keep running stale sibling modules.
@@ -18,6 +18,7 @@ local loggerModule = require(MODULE_DIR .. 'logger')
 local transportModule = require(MODULE_DIR .. 'transport')
 local serverModule = require(MODULE_DIR .. 'server')
 local devReload = require(MODULE_DIR .. 'devReload')
+local radar = require(MODULE_DIR .. 'radar')
 
 local M = {}
 
@@ -55,6 +56,18 @@ local function getVehicle(player)
   return getPlayerVehicle(player)
 end
 
+-- Every spawned vehicle object; radar.describe() drops props (cones,
+-- barriers) by size. getAllVehiclesByType() is NOT used: it queries the
+-- vehicle models database, far too slow (and fragile) for 10 Hz.
+local function listVehicles()
+  local list = {}
+  for _, veh in ipairs(type(getAllVehicles) == 'function' and getAllVehicles() or {}) do
+    local d = radar.describe(veh)
+    if d then list[#list + 1] = d end
+  end
+  return list
+end
+
 local function switchVehicle(player, direction)
   local switching = extensions.core_input_vehicleSwitching
   if not switching then return false, 'unavailable:vehicle_switching' end
@@ -83,6 +96,7 @@ local function createServer()
     getSecurityCode = getSecurityCode,
     getHostLabel = getHostLabel,
     getVehicle = getVehicle,
+    listVehicles = listVehicles,
     switchVehicle = switchVehicle,
     cycleCamera = cycleCamera,
     onDeviceCreated = function()

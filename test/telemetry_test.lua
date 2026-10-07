@@ -29,7 +29,8 @@ t.describe('telemetry router', function()
     registry.connect('b', { version = 2 }).player = 0
     registry.connect('c', { version = 2 }).player = 1
     t.assertEquals(telemetry.tick(registry), 2)
-    t.assertContains(vehicles[0].commands[1], "extensions.load('beamRemotePlus/telemetry')")
+    t.assertContains(vehicles[0].commands[1], "extensions.reload('beamRemotePlus_telemetry')")
+    t.assertContains(vehicles[0].commands[1], telemetryModule.LOAD_STAMP)
   end)
   t.it('respects the request interval', function()
     local telemetry, registry, _, _, clock = setup()
@@ -60,5 +61,25 @@ t.describe('telemetry router', function()
   t.it('ignores malformed snapshots', function()
     local telemetry, registry = setup()
     t.assertEquals(telemetry.dispatch(registry, 11, 'garbage'), 0)
+  end)
+end)
+
+t.describe('telemetry router: radar', function()
+  t.it('attaches the cars around the followed vehicle', function()
+    local clock = fakes.clock()
+    local sent = {}
+    local registry = clientsModule.new(fakes.input(), clock.fn)
+    local telemetry = telemetryModule.new({
+      getVehicle = function() return fakes.vehicle(11) end,
+      listVehicles = function()
+        return { { id = 11, x = 0, y = 0, fx = 0, fy = 1 }, { id = 12, x = 0, y = 20, fx = 0, fy = 1 } }
+      end,
+      send = function(_, payload) sent[#sent + 1] = payload end,
+      clock = clock.fn,
+    })
+    registry.connect('a', { version = 2 }).player = 0
+    telemetry.tick(registry)
+    telemetry.dispatch(registry, 11, { rpm = 1 })
+    t.assertContains(sent[1], '"radar":[{"heading":0,"length":4.5,"width":1.9,"x":0,"y":20}]')
   end)
 end)

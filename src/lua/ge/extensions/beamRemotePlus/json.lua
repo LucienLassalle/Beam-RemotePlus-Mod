@@ -39,7 +39,8 @@ local encode
 local function encodeTable(t, depth)
   if depth > 16 then error('json: nesting too deep') end
   local parts = {}
-  if next(t) ~= nil and isArray(t) then
+  local mt = getmetatable(t)
+  if (mt and mt.__jsonArray and next(t) == nil) or (next(t) ~= nil and isArray(t)) then
     for i = 1, #t do parts[i] = encode(t[i], depth + 1) end
     return '[' .. table.concat(parts, ',') .. ']'
   end
