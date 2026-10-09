@@ -33,10 +33,17 @@ M.CLIENT_PORT = 4447
 M.PROTOCOL_VERSION = 2
 M.LEGACY_PROTOCOL_VERSION = 1
 
-M.PING_PREFIX = 'beamngremoteplus|ping|'
-M.PONG_PREFIX = 'beamngremoteplus|pong|'
-M.DISCOVER_MESSAGE = 'beamngremoteplus|discover'
-M.HELLO_PREFIX = 'beamngremoteplus|hello|'
+-- Handshake messages start with "beamremoteplus|". Apps up to 0.0.3 use
+-- "beamngremoteplus|": both are accepted, and the answer always uses the
+-- prefix of the request, so old and new apps keep working.
+M.PREFIX = 'beamremoteplus'
+M.LEGACY_PREFIX = 'beamngremoteplus'
+M.PREFIXES = { M.PREFIX, M.LEGACY_PREFIX }
+
+M.PING_PREFIX = M.PREFIX .. '|ping|'
+M.PONG_PREFIX = M.PREFIX .. '|pong|'
+M.DISCOVER_MESSAGE = M.PREFIX .. '|discover'
+M.HELLO_PREFIX = M.PREFIX .. '|hello|'
 M.CMD_PREFIX = 'cmd|'
 
 M.CONTROL_PACKET_SIZE = 12
@@ -61,12 +68,28 @@ end
 
 -- Handshake ---------------------------------------------------------------
 
+-- Prefix of a discover probe ("beamremoteplus" or the legacy one), or nil.
+function M.discoverPrefix(data)
+  for _, prefix in ipairs(M.PREFIXES) do
+    if data == prefix .. '|discover' then return prefix end
+  end
+  return nil
+end
+
 function M.isDiscoverMessage(data)
-  return data == M.DISCOVER_MESSAGE
+  return M.discoverPrefix(data) ~= nil
+end
+
+-- Prefix of a ping, or nil.
+local function pingPrefix(data)
+  for _, prefix in ipairs(M.PREFIXES) do
+    if startsWith(data, prefix .. '|ping|') then return prefix end
+  end
+  return nil
 end
 
 function M.isPingMessage(data)
-  return startsWith(data, M.PING_PREFIX)
+  return pingPrefix(data) ~= nil
 end
 
 function M.isCmdMessage(data)
@@ -88,19 +111,20 @@ end
 M.ROLE_CONTROLLER = 'controller'
 M.ROLE_DISPLAY = 'display' -- second screen: telemetry only, no inputs
 
--- Returns { code, version, deviceName, role } or nil. Apps speaking
+-- Returns { code, version, deviceName, role, prefix } or nil. Apps speaking
 -- protocol 1 only send the code, so a missing version means 1.
--- ping: beamngremoteplus|ping|<code>[|<version>[|<device>[|<role>]]]
+-- ping: beamremoteplus|ping|<code>[|<version>[|<device>[|<role>]]]
 function M.parsePing(data)
-  if not M.isPingMessage(data) then return nil end
-  local fields = M.splitFields(data:sub(#M.PING_PREFIX + 1))
+  local prefix = pingPrefix(data)
+  if not prefix then return nil end
+  local fields = M.splitFields(data:sub(#prefix + #'|ping|' + 1))
   local code = fields[1]
   if not code or code == '' then return nil end
   local version = tonumber(fields[2]) or M.LEGACY_PROTOCOL_VERSION
   local deviceName = fields[3]
   if deviceName == '' then deviceName = nil end
   local role = fields[4] == M.ROLE_DISPLAY and M.ROLE_DISPLAY or M.ROLE_CONTROLLER
-  return { code = code, version = version, deviceName = deviceName, role = role }
+  return { code = code, version = version, deviceName = deviceName, role = role, prefix = prefix }
 end
 
 function M.pingMatchesCode(data, code)
@@ -115,14 +139,16 @@ function M.negotiateVersion(clientVersion)
   return math.min(tonumber(clientVersion) or M.LEGACY_PROTOCOL_VERSION, M.PROTOCOL_VERSION)
 end
 
-function M.buildPongMessage(code, version)
-  return M.PONG_PREFIX .. tostring(code) .. '|' .. tostring(version or M.PROTOCOL_VERSION)
+-- prefix: the one of the ping (default: the current one).
+function M.buildPongMessage(code, version, prefix)
+  return (prefix or M.PREFIX) .. '|pong|' .. tostring(code) .. '|' .. tostring(version or M.PROTOCOL_VERSION)
 end
 
 -- label: human readable PC name shown by the app when several PCs answer.
-function M.buildHelloMessage(code, label)
+-- prefix: the one of the discover probe (default: the current one).
+function M.buildHelloMessage(code, label, prefix)
   label = tostring(label or 'BeamNG.drive'):gsub('|', ' ')
-  return M.HELLO_PREFIX .. tostring(code) .. '|' .. label
+  return (prefix or M.PREFIX) .. '|hello|' .. tostring(code) .. '|' .. label
 end
 
 -- Commands ----------------------------------------------------------------

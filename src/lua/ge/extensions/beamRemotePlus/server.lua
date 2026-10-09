@@ -126,13 +126,13 @@ function M.new(deps)
 
   -- Packet handlers ---------------------------------------------------------
 
-  local function handleDiscover(ip)
+  local function handleDiscover(ip, data)
     local code = deps.getSecurityCode()
     if not code then
       log.warn('discover from ' .. ip .. ' ignored: pairing code unavailable')
       return
     end
-    deps.transport.send(protocol.buildHelloMessage(code, deps.getHostLabel()), ip, protocol.CLIENT_PORT)
+    deps.transport.send(protocol.buildHelloMessage(code, deps.getHostLabel(), protocol.discoverPrefix(data)), ip, protocol.CLIENT_PORT)
     log.debug('discover from ' .. ip .. ' -> hello sent')
     local now = deps.clock()
     if now - lastDiscoverToast > 5000 then -- the app probes ~2x/s
@@ -153,7 +153,7 @@ function M.new(deps)
       log.error('cannot connect ' .. ip .. ': ' .. tostring(err))
       return
     end
-    deps.transport.send(protocol.buildPongMessage(code, client.version), ip, protocol.CLIENT_PORT)
+    deps.transport.send(protocol.buildPongMessage(code, client.version, ping.prefix), ip, protocol.CLIENT_PORT)
     if isNew then
       -- BeamNG does not notice virtual devices on its own: without a rescan
       -- the device is not assigned to a player until something else
@@ -196,7 +196,7 @@ function M.new(deps)
   end
 
   function self.handlePacket(ip, data)
-    if protocol.isDiscoverMessage(data) then return handleDiscover(ip) end
+    if protocol.isDiscoverMessage(data) then return handleDiscover(ip, data) end
     if protocol.isPingMessage(data) then return handlePing(ip, data) end
     local client = clients.get(ip)
     if not client then
