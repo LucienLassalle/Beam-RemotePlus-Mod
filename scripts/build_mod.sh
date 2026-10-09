@@ -2,8 +2,9 @@
 # Packages src/ into dist/Beam-RemotePlus.zip, ready for BeamNG's mods/ folder.
 #
 # Usage: scripts/build_mod.sh [version]
-#   version (e.g. 2.1.0, a leading "v" is stripped) is written into
-#   mod_info/*/info.json and server.lua; without it the sources are packaged
+#   version (the release tag, e.g. v0.0.3, a leading "v" is stripped) is
+#   written into server.lua and the UI app (both say "dev" in the sources);
+#   the release workflow passes the tag. Without it the sources are packaged
 #   as they are. The archive is reproducible: fixed timestamps, sorted entries.
 set -euo pipefail
 
@@ -23,7 +24,7 @@ if [[ -n "$VERSION" ]]; then
     echo "error: '$VERSION' is not a semantic version" >&2
     exit 1
   fi
-  sed -i -E "s/\"version_string\": \"[^\"]*\"/\"version_string\": \"$VERSION\"/" "$STAGE_DIR"/mod_info/*/info.json
+  sed -i -E "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$STAGE_DIR/ui/modules/apps/BeamRemotePlus/app.json"
   sed -i -E "s/^M\.VERSION = '[^']*'/M.VERSION = '$VERSION'/" "$STAGE_DIR/lua/ge/extensions/beamRemotePlus/server.lua"
 fi
 

@@ -9,7 +9,8 @@ local telemetryModule = require('/lua/ge/extensions/beamRemotePlus/telemetry')
 
 local M = {}
 
-M.VERSION = '2.0.0'
+-- 'dev' in the sources: scripts/build_mod.sh stamps the release version.
+M.VERSION = 'dev'
 M.MAX_PACKETS_PER_FRAME = 256
 
 --[[

@@ -175,7 +175,7 @@ Errors: `unknown_command`, `bad_argument`, `no_vehicle`, `display_only`,
 switched on.
 
 ```json
-{"type":"session","modVersion":"2.0.0","player":0,"commands":["cam_next", "..."]}
+{"type":"session","modVersion":"0.0.3","player":0,"commands":["cam_next", "..."]}
 ```
 
 ### Version 1: binary telemetry (36 bytes)
