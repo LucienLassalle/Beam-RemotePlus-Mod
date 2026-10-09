@@ -55,6 +55,25 @@ t.describe('vehicle telemetry collect()', function()
     t.assertFalse(vehicleTelemetry.collect({ rpm = 7000, maxrpm = 8000 }).shiftLight)
     t.assertFalse(vehicleTelemetry.collect({ rpm = 7900, maxrpm = 8000, gearIndex = 6, maxGearIndex = 6 }).shiftLight)
   end)
+  t.it('reads the configured tyre pressures (kPa) per wheel', function()
+    local triangles = {
+      { pressureGroup = 'wheel_FL', pressurePSI = 20 },
+      { pressureGroup = 'wheel_FL', pressurePSI = 20 },
+      { pressureGroup = 'wheel_RR', pressurePSI = 30 },
+      { id1 = 1 }, -- not pressured
+    }
+    local n = vehicleTelemetry.nominalPressures(triangles, { FL = 'wheel_FL', RR = 'wheel_RR', RL = 'missing' })
+    t.assertCloseTo(n.FL, 137.9)
+    t.assertCloseTo(n.RR, 206.8)
+    t.assertNil(n.RL)
+    t.assertNil(vehicleTelemetry.nominalPressures({}, { FL = 'wheel_FL' }))
+  end)
+  t.it('reads the brake disc temperatures', function()
+    local s = vehicleTelemetry.collect({ wheelThermals = { FL = { brakeSurfaceTemperature = 351.6 }, RR = {} } })
+    t.assertEquals(s.brakeTemps.FL, 352)
+    t.assertNil(s.brakeTemps.RR)
+    t.assertNil(vehicleTelemetry.collect({}).brakeTemps)
+  end)
   t.it('reports low oil pressure from either electric', function()
     t.assertTrue(vehicleTelemetry.collect({ lowpressure = 0, oil = 1 }).lowPressure)
     t.assertFalse(vehicleTelemetry.collect({ lowpressure = 0 }).lowPressure)

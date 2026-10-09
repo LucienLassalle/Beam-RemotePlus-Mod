@@ -25,4 +25,13 @@ t.describe('vehicle damage summary', function()
     t.assertEquals(d.flatTires[1], 'FR')
     t.assertEquals(d.hotBrakes[1], 'RL')
   end)
+  t.it('reports molten brakes, torn off wheels and a leaking fuel tank', function()
+    local d = damage.collect(reader({
+      ['wheels.brakeFL'] = true, ['wheels.RR'] = true, ['energyStorage.mainTank'] = true,
+    }), { 'FL', 'FR', 'RL', 'RR' }, { 'mainTank' })
+    t.assertEquals(d.brokenBrakes[1], 'FL')
+    t.assertEquals(d.brokenWheels[1], 'RR')
+    t.assertTrue(d.fuelLeak)
+    t.assertNil(damage.collect(reader({}), { 'FL' }, { 'mainTank' }).fuelLeak)
+  end)
 end)

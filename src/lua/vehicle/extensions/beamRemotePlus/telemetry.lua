@@ -12,8 +12,10 @@
 -- Fresh copies of the helper modules when this extension is reloaded.
 package.loaded['extensions/beamRemotePlus/damage'] = nil
 package.loaded['extensions/beamRemotePlus/tyres'] = nil
+package.loaded['extensions/beamRemotePlus/drivetrain'] = nil
 local damage = require('extensions/beamRemotePlus/damage')
 local tyres = require('extensions/beamRemotePlus/tyres')
+local drivetrain = require('extensions/beamRemotePlus/drivetrain')
 
 local M = {}
 
@@ -70,6 +72,45 @@ function M.gearLabel(gear)
   return tostring(gear)
 end
 
+local PSI_TO_KPA = 6.894757
+
+-- Pressure each tyre was inflated to in the vehicle configuration (kPa,
+-- above the atmosphere), so the phone compares the current pressure to
+-- what this car runs instead of a fixed threshold (race cars run low).
+-- triangles: v.data.triangles (pressured ones carry pressureGroup and
+-- pressurePSI); wheelGroups: { FL = 'pressureGroupName', ... }
+function M.nominalPressures(triangles, wheelGroups)
+  local psiByGroup = {}
+  for _, tri in pairs(triangles or {}) do
+    local psi = type(tri) == 'table' and tri.pressureGroup ~= nil and finite(tri.pressurePSI)
+    if psi and psi > 0 and psiByGroup[tri.pressureGroup] == nil then psiByGroup[tri.pressureGroup] = psi end
+  end
+  local result, any = {}, false
+  for wheel, group in pairs(wheelGroups or {}) do
+    local psi = psiByGroup[group]
+    if psi then
+      result[wheel] = round(psi * PSI_TO_KPA, 1)
+      any = true
+    end
+  end
+  return any and result or nil
+end
+
+-- Brake disc surface temperature (°C) per wheel, from the game's brake
+-- thermals (electrics.values.wheelThermals).
+function M.brakeTemps(wheelThermals)
+  if type(wheelThermals) ~= 'table' then return nil end
+  local result, any = {}, false
+  for name, w in pairs(wheelThermals) do
+    local temp = type(w) == 'table' and round(w.brakeSurfaceTemperature, 0)
+    if type(name) == 'string' and temp then
+      result[name] = temp
+      any = true
+    end
+  end
+  return any and result or nil
+end
+
 -- e: electrics.values ; extra: { gx, gy, gz, tirePressures, driveMode, envTemp }
 function M.collect(e, extra)
   extra = extra or {}
@@ -120,8 +161,16 @@ function M.collect(e, extra)
     envTemp = round(extra.envTemp, 1),
     driveMode = extra.driveMode,
     tirePressures = extra.tirePressures,
+    tirePressuresNominal = extra.tirePressuresNominal,
     wheelSlip = round(extra.wheelSlip, 2),
+    wheelSpin = extra.wheelSpin,
+    wheelLock = extra.wheelLock,
     tyres = extra.tyres,
+    brakeTemps = M.brakeTemps(e.wheelThermals),
+    clutchTemp = extra.clutchTemp,
+    clutchState = extra.clutchState,
+    brokenParts = extra.brokenParts,
+    drivetrain = extra.drivetrain,
   }
   for k, v in pairs(extra.damage or {}) do t[k] = v end
 
@@ -172,9 +221,68 @@ local function maxWheelSlip()
   return maxSlip
 end
 
+local function fuelTankNames()
+  local names = {}
+  local storages = energyStorage and energyStorage.getStorages and energyStorage.getStorages() or {}
+  for name, storage in pairs(storages) do
+    if type(storage) == 'table' and storage.type == 'fuelTank' then names[#names + 1] = storage.name or name end
+  end
+  return names
+end
+
 local function readDamage()
   if not (damageTracker and damageTracker.getDamage) then return nil end
-  return damage.collect(damageTracker.getDamage, wheelNames())
+  return damage.collect(damageTracker.getDamage, wheelNames(), fuelTankNames())
+end
+
+local function powertrainDevices()
+  return powertrain and powertrain.getDevices and powertrain.getDevices() or {}
+end
+
+local function nodePos(cid)
+  local node = v and v.data and v.data.nodes and cid ~= nil and v.data.nodes[cid]
+  return node and node.pos or nil
+end
+
+-- What does not change while driving (computed once per vehicle VM: a new
+-- configuration respawns the vehicle and reloads this extension).
+local static = nil
+local function readStatic()
+  if static then return static end
+  local s = {}
+  local groups = {}
+  for _, wd in pairs(wheels and wheels.wheels or {}) do
+    if wd.name and wd.pressureGroup then groups[wd.name] = wd.pressureGroup end
+  end
+  s.nominal = M.nominalPressures(v and v.data and v.data.triangles, groups)
+
+  local devices = powertrainDevices()
+  local engineNode
+  for _, d in pairs(devices) do
+    if type(d) == 'table' and d.engineNodeID then engineNode = d.engineNodeID break end
+  end
+  local ref = v and v.data and v.data.refNodes and v.data.refNodes[0]
+  local positions = {}
+  for _, node in pairs(v and v.data and v.data.nodes or {}) do
+    if node.pos then positions[#positions + 1] = node.pos end
+  end
+  local layout = {
+    shafts = drivetrain.shafts(devices),
+    engineAt = ref and drivetrain.engineAt(nodePos(engineNode), nodePos(ref.ref), nodePos(ref.back), positions),
+  }
+  s.drivetrain = next(layout) and layout or nil
+  static = s
+  return static
+end
+
+local function wheelSurfaceSpeeds()
+  local speeds = {}
+  for _, wd in pairs(wheels and wheels.wheels or {}) do
+    if not wd.isBroken and wd.angularVelocity and wd.radius then
+      speeds[#speeds + 1] = wd.angularVelocity * wd.radius
+    end
+  end
+  return speeds
 end
 
 local function readDriveMode()
@@ -194,7 +302,18 @@ function M.send()
   if gui then tyres.install(gui) end
   local ok, err = pcall(function()
     if not (electrics and electrics.values) then return end
+    local fixed = readStatic()
+    local devices = powertrainDevices()
+    local clutchTemp, clutchState = drivetrain.clutch(devices)
+    local spin, lock = drivetrain.spinLock(wheelSurfaceSpeeds(), electrics.values.airspeed)
     local extra = {
+      tirePressuresNominal = fixed.nominal,
+      drivetrain = fixed.drivetrain,
+      clutchTemp = clutchTemp,
+      clutchState = clutchState,
+      brokenParts = drivetrain.broken(devices),
+      wheelSpin = spin,
+      wheelLock = lock,
       gx = sensors and sensors.gx2,
       gy = sensors and sensors.gy2,
       gz = sensors and sensors.gz2,
