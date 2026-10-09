@@ -9,7 +9,7 @@
   "beamRemotePlus.toast.portBusy": "UDP port {port} is already in use: phones cannot connect",
   "beamRemotePlus.label.host": "{name}'s PC",
   "beamRemotePlus.app.name": "Beam-RemotePlus",
-  "beamRemotePlus.app.description": "Phone remote control: connection switch, pairing code and connected phones",
+  "beamRemotePlus.app.description": "Phone remote control (needs the Beam-RemotePlus Android app): connection switch, pairing code and connected phones",
   "beamRemotePlus.app.enable": "Allow phones to connect",
   "beamRemotePlus.app.code": "Pairing code",
   "beamRemotePlus.app.phones": "Connected phones",

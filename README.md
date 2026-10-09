@@ -1,83 +1,89 @@
-# Beam-RemotePlus — BeamNG.drive mod
+# Beam-RemotePlus — mod
 
-Drive BeamNG.drive with your phone. This mod is the game-side half of
-[Beam-RemotePlus-Mobile](https://github.com/LucienLassalle/Beam-RemotePlus-Mobile).
+> **The Android app is required.** This mod is the game side of
+> Beam-RemotePlus: on its own it does nothing visible. Install the app from
+> [Beam-RemotePlus-Mobile](https://github.com/LucienLassalle/Beam-RemotePlus-Mobile/releases/latest).
 
-BeamNG's official phone controller,
-[BeamNG/remotecontrol](https://github.com/BeamNG/remotecontrol), is no longer
-maintained: its telemetry stopped working, its pedals are on/off only and the
-in-game QR code is unreliable since 0.39. Beam-RemotePlus is the new
-generation that replaces it. It is a community project, not affiliated with
-BeamNG GmbH.
+Drive [BeamNG.drive®](https://www.beamng.com/) with your phone: tilt
+steering, analog pedals, live dashboard, vehicle buttons and damage view.
+
+**Beam-RemotePlus** (not "BeamNG-RemotePlus") is a **community project**: a
+free, open source mod and app made by players. It is **not an official
+BeamNG product** and is not affiliated with, endorsed or supported by
+BeamNG GmbH. It replaces BeamNG's former phone controller,
+[BeamNG/remotecontrol](https://github.com/BeamNG/remotecontrol), which is no
+longer maintained.
 
 ## Features
 
-- **Automatic pairing** on the local network: no QR code, no typing (the
-  game's QR screen is unreliable since 0.39). The pairing code is also shown
-  in game.
-- **Analog steering, throttle and brake** through a virtual controller.
-- **Full dashboard telemetry**: speed, RPM, gear label (P/R/N/D/S...), fuel,
-  water/oil temperatures, boost, warning lights, indicators, ABS/ESC/TCS,
-  cruise control, odometer, g-forces, tyre pressures, drive mode...
-- **Vehicle state**: body damage per zone, engine failures, broken
-  driveshafts and axles, fuel tank leaks, flat tyres compared to the car's
-  own tyre pressures, brake temperatures, clutch overheating, wheelspin and
-  locked wheels (phone vibrations), electric cars (battery, motor power,
-  regenerative braking) and a **proximity radar** of the cars
-  around.
-- **Tyre temperatures and wear** when the *Tyre Thermals and Wear* mod is
-  installed (see below).
-- **Second-screen phones**: a phone can join as a display only (dashboard,
-  radar, damage) without creating a game controller.
-- **Vehicle functions**: horn and high beams (held), hazards, indicators,
-  lights, parking brake, starter, ESC/drive mode, gearbox mode, cruise
-  control, gears, recovery, vehicle and camera switching.
-- **Local multiplayer**: one phone per player, each phone shows up under its
-  own name in Options > Controls.
-- **On by default**, with a switch to block phones: the *Enable Beam-RemotePlus
-  (phones)* action in **Options > Controls > General** (bind it to any key) or
-  the optional **Beam-RemotePlus** UI app.
-- **Debug mode** for developers: verbose logs and command acknowledgements
-  shown in the app.
+- Analog steering, throttle and brake through a virtual game controller.
+- Dashboard telemetry: speed, RPM, gear, fuel or battery, temperatures,
+  warning lights, indicators, ABS/ESC/TCS, cruise control, g-forces, tyre
+  pressures, drive mode.
+- Vehicle state: body and engine damage, drivetrain, tyres, brakes, clutch,
+  the real structure of the vehicle for the phone's damage view, and a radar
+  of the cars around.
+- Vehicle functions from the phone: horn, lights, indicators, hazards,
+  parking brake, ignition, drive mode, gearbox mode, cruise control, gears,
+  recovery, vehicle and camera switching.
+- Second-screen phones (display only) and local multiplayer (one phone per
+  player).
 - English and French.
+
+## Requirements
+
+- The [Beam-RemotePlus Android app](https://github.com/LucienLassalle/Beam-RemotePlus-Mobile/releases/latest)
+  (Android 7.0 or newer).
+- The phone and the PC on the same local network (Wi-Fi, or the phone's
+  hotspot).
 
 ## Installation
 
 1. Download `Beam-RemotePlus.zip` from the
-   [latest release](https://github.com/LucienLassalle/Beam-RemotePlus-Mod/releases/latest).
-2. Put it in your BeamNG user folder `mods/` (or drag it onto the game window).
-3. Enable **Beam-RemotePlus** in the mod manager. That's it: it starts with the
-   game from now on.
-4. Install the app, put the phone on the same network (or use its hotspot) and
-   tap **Automatic connection**.
+   [latest release](https://github.com/LucienLassalle/Beam-RemotePlus-Mod/releases/latest)
+   and put it in the `mods/` folder of your BeamNG.drive user folder (or
+   drag it onto the game window).
+2. Enable **Beam-RemotePlus** in the mod manager. It then starts with the
+   game.
+3. Install the Android app, put the phone on the same network, load a level
+   and tap **Automatic connection** in the app.
 
-The mod uses UDP ports **4446** (PC) and **4447** (phone). Allow them in your
-firewall if the phone cannot find the PC.
+Phones can be blocked at any time with the **Enable Beam-RemotePlus
+(phones)** action (Options > Controls > General) or the optional
+**Beam-RemotePlus** UI app.
+
+## Network
+
+The mod only talks to phones on your local network, never to the internet.
+It listens on UDP port **4446** and answers on the phone's port **4447**;
+allow them in your firewall if the phone cannot find the PC.
 
 ## Optional: tyre temperatures
 
-Install the **Tyre Thermals and Wear** mod (by Luuk, on the BeamNG
-repository) and enable it: Beam-RemotePlus then sends the average
-temperature, the working temperature, the wear and the brake temperature of
-each tyre, shown on the phone's damage view. It works by listening to the
-message that mod sends to its own UI app; its behaviour is unchanged and
-nothing is sent when it is not installed.
+With the **Tyre Thermals and Wear** mod (by Luuk, on the BeamNG.drive
+repository) enabled, the phone also shows the temperature and wear of each
+tyre. Nothing changes for that mod, and nothing is sent without it.
 
 ## Development
 
 ```bash
-scripts/test_mod.sh        # unit tests (luajit)
-scripts/build_mod.sh 2.1.0 # dist/Beam-RemotePlus.zip, version stamped
-scripts/deploy_local.sh    # build + copy to the local game + hot reload
-scripts/fake_phone.py      # talk to the running game like the app does
+scripts/test_mod.sh         # unit tests (luajit)
+scripts/build_mod.sh        # dist/Beam-RemotePlus.zip
+scripts/deploy_local.sh     # build + copy to the local game + hot reload
+scripts/fake_phone.py       # talk to the running game like the app does
 ```
 
 - Architecture and how to add a command or a language: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Wire protocol: [docs/PROTOCOL.md](docs/PROTOCOL.md)
-- Releasing: publish a GitHub release with a `vX.Y.Z` tag; CI attaches the
-  zip, SBOMs (SPDX + CycloneDX) and checksums.
+- Releasing: publish a GitHub release with a `vX.Y.Z` tag. CI builds the
+  zip with that version (the sources only say `dev`) and attaches it with
+  SBOMs (SPDX + CycloneDX) and checksums.
 
 ## License
 
 [CC BY-NC-SA 4.0](LICENSE): you may share and adapt this mod for
 non-commercial purposes, with attribution, under the same license.
+
+BeamNG.drive is a registered trademark of BeamNG GmbH. Beam-RemotePlus is
+an independent community project, not affiliated with or endorsed by
+BeamNG GmbH.
