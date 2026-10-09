@@ -28,9 +28,10 @@ end
 -- getDamage(group, name) -> value (damageTracker.getDamage)
 -- wheelNames: { 'FL', 'FR', ... }
 -- tankNames: names of the fuel tank energy storages ({ 'mainTank' })
+-- batteryNames: names of the traction batteries (electric cars)
 -- Returns nil fields when nothing is damaged, so a pristine car costs
 -- nothing in the telemetry frame.
-function M.collect(getDamage, wheelNames, tankNames)
+function M.collect(getDamage, wheelNames, tankNames, batteryNames)
   local result = {}
 
   local body, anyBody = {}, false
@@ -64,6 +65,9 @@ function M.collect(getDamage, wheelNames, tankNames)
 
   for _, name in ipairs(tankNames or {}) do
     if truthy(getDamage('energyStorage', name)) then result.fuelLeak = true end
+  end
+  for _, name in ipairs(batteryNames or {}) do
+    if truthy(getDamage('energyStorage', name)) then result.batteryDamaged = true end
   end
 
   -- Set for 2 s by the manual gearbox each time a shift grinds.

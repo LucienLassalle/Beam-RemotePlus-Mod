@@ -134,6 +134,7 @@ provide it (show "n/a", do not assume 0).
 | `flatTires`, `hotBrakes` | arrays of wheel names (`hotBrakes` = brakes fading) |
 | `brokenBrakes`, `brokenWheels` | arrays of wheel names (molten brake, wheel torn off) |
 | `fuelLeak` | bool, fuel tank damaged |
+| `batteryDamaged` | bool, traction battery damaged (electric cars) |
 | `tyres` | `{ "FL": { "temp", "working", "condition", "brake", "surface"?, "core"? } }` (°C, condition % left), only with the *Tyre Thermals and Wear* mod |
 | `radar` | array of the 12 nearest cars within 50 m, nearest first: `{ "x": m right, "y": m ahead, "heading": ° relative, "length", "width" }` (`[]` when nobody is around) |
 | `player` | player index (0-based) |

@@ -226,18 +226,18 @@ local function maxWheelSlip()
   return maxSlip
 end
 
-local function fuelTankNames()
+local function storageNames(storageType)
   local names = {}
   local storages = energyStorage and energyStorage.getStorages and energyStorage.getStorages() or {}
   for name, storage in pairs(storages) do
-    if type(storage) == 'table' and storage.type == 'fuelTank' then names[#names + 1] = storage.name or name end
+    if type(storage) == 'table' and storage.type == storageType then names[#names + 1] = storage.name or name end
   end
   return names
 end
 
 local function readDamage()
   if not (damageTracker and damageTracker.getDamage) then return nil end
-  return damage.collect(damageTracker.getDamage, wheelNames(), fuelTankNames())
+  return damage.collect(damageTracker.getDamage, wheelNames(), storageNames('fuelTank'), storageNames('electricBattery'))
 end
 
 local function powertrainDevices()
