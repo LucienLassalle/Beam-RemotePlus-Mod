@@ -22,7 +22,8 @@ BeamNG GmbH.
 - **Vehicle state**: body damage per zone, engine failures, broken
   driveshafts and axles, fuel tank leaks, flat tyres compared to the car's
   own tyre pressures, brake temperatures, clutch overheating, wheelspin and
-  locked wheels (phone vibrations) and a **proximity radar** of the cars
+  locked wheels (phone vibrations), electric cars (battery, motor power,
+  regenerative braking) and a **proximity radar** of the cars
   around.
 - **Tyre temperatures and wear** when the *Tyre Thermals and Wear* mod is
   installed (see below).

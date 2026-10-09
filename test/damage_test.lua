@@ -34,6 +34,11 @@ t.describe('vehicle damage summary', function()
     t.assertTrue(d.fuelLeak)
     t.assertNil(damage.collect(reader({}), { 'FL' }, { 'mainTank' }).fuelLeak)
   end)
+  t.it('reports a damaged traction battery', function()
+    local d = damage.collect(reader({ ['energyStorage.mainBattery'] = true }), {}, {}, { 'mainBattery' })
+    t.assertTrue(d.batteryDamaged)
+    t.assertNil(d.fuelLeak)
+  end)
   t.it('relays the live engine dangers and grinding gears', function()
     local d = damage.collect(reader({
       ['engine.turbochargerHot'] = true, ['engine.overRevDanger'] = true, ['gearbox.synchroWear'] = true,

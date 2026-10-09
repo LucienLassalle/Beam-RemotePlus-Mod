@@ -87,6 +87,35 @@ function M.shafts(devices)
   return #list > 0 and list or nil
 end
 
+-- 'combustion', 'electric' or 'hybrid' from the engine devices; nil
+-- without any (trailer, prop).
+function M.powertrainType(devices)
+  local combustion, electric = false, false
+  for _, d in pairs(devices or {}) do
+    if type(d) == 'table' then
+      if d.type == 'combustionEngine' then combustion = true end
+      if d.type == 'electricMotor' then electric = true end
+    end
+  end
+  if combustion and electric then return 'hybrid' end
+  if electric then return 'electric' end
+  if combustion then return 'combustion' end
+  return nil
+end
+
+-- Mechanical power of the electric motors in kW: positive when driving,
+-- negative when regenerating; nil without electric motor.
+function M.motorPower(devices)
+  local watts, any = 0, false
+  for _, d in pairs(devices or {}) do
+    if type(d) == 'table' and d.type == 'electricMotor' then
+      any = true
+      watts = watts + (tonumber(d.outputTorque1) or 0) * (tonumber(d.outputAV1) or 0)
+    end
+  end
+  return any and round(watts / 1000, 1) or nil
+end
+
 -- Where the engine sits along the car: 0 = front bumper, 1 = rear bumper.
 -- enginePos, frontPos, backPos: { x, y, z } (the reference node and the
 -- one behind it give the forward direction); nodes: every node position
