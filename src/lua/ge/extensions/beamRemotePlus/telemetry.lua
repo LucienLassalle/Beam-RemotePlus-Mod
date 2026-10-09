@@ -113,6 +113,22 @@ function M.new(deps)
     return sent
   end
 
+  -- Skeleton geometry of a vehicle (asked by a phone with cmd|skeleton),
+  -- split into datagrams for every v2 phone following it. Returns the
+  -- number of phones it was sent to.
+  function self.dispatchSkeleton(registry, vehicleId, s)
+    local messages = protocol.buildSkeletonMessages(s)
+    if #messages == 0 then return 0 end
+    local sent = 0
+    registry.each(function(_, client)
+      if client.vehicleId == vehicleId and client.version >= 2 then
+        for _, message in ipairs(messages) do deps.send(client, message) end
+        sent = sent + 1
+      end
+    end)
+    return sent
+  end
+
   return self
 end
 

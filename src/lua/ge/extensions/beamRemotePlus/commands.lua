@@ -43,6 +43,13 @@ M.PRESS_ACTIONS = {
   cruise_down = "extensions.use('cruiseControl').changeSpeed(-1/3.6)",
 }
 
+-- What a second-screen phone may still ask: they read, never drive.
+M.DISPLAY_COMMANDS = { debug = true, skeleton = true }
+
+-- Asks the vehicle VM for its skeleton geometry (sent back through
+-- extensions.beamRemotePlus_main.onSkeleton).
+M.SKELETON_REQUEST = 'local e = extensions.beamRemotePlus_telemetry if e and e.sendSkeleton then e.sendSkeleton() end'
+
 -- Protocol v1 command names kept as aliases of their v2 equivalent.
 M.ALIASES = {
   recover_start = { 'recover', '1' },
@@ -95,6 +102,7 @@ function M.new(deps)
     cam_prev = function(client) return deps.cycleCamera(client.player or 0, -1) end,
     gear_up = function(client) deps.pulseButton(client, deps.buttons.shiftUp) return true end,
     gear_down = function(client) deps.pulseButton(client, deps.buttons.shiftDown) return true end,
+    skeleton = function(client) return runOnVehicle(client, M.SKELETON_REQUEST) end,
     debug = function(client, arg)
       local on = M.parseHoldArg(arg)
       if on == nil then return false, M.ERR_BAD_ARGUMENT end

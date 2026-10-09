@@ -33,7 +33,7 @@ PC    → phone     beamngremoteplus|pong|<code>|<negotiated version>
   the legacy binary telemetry (section 5).
 - `display` (optional): **second screen**. The phone gets the telemetry of
   player 1 but no virtual input device, its control packets are ignored and
-  every command except `debug` is refused with `display_only`. A phone that
+  every command except `debug` and `skeleton` is refused with `display_only`. A phone that
   changes role starts a new session.
 - The phone pings every 500 ms until it receives the pong, then every 2 s:
   if the mod restarted and forgot the phone, the ping re-creates the session. Once paired, any
@@ -77,6 +77,7 @@ cmd|<name>|1 / |0     hold commands (pressed / released)
 | `next_vehicle`, `prev_vehicle` | press | switch vehicle (player's own) |
 | `cam_next`, `cam_prev` | press | camera |
 | `debug` | hold | `1` = acknowledge every command, `0` = errors only |
+| `skeleton` | press | sends the skeleton of the vehicle (`skeleton` messages below) |
 
 Version 1 aliases: `recover_start` = `recover|1`, `recover_stop` = `recover|0`.
 
@@ -139,6 +140,26 @@ provide it (show "n/a", do not assume 0).
 | `radar` | array of the 12 nearest cars within 50 m, nearest first: `{ "x": m right, "y": m ahead, "heading": ° relative, "length", "width" }` (`[]` when nobody is around) |
 | `player` | player index (0-based) |
 | `vehicle` | vehicle model (`scintilla`, `bolide`...) |
+| `skeleton` | id of the vehicle skeleton (changes with the vehicle or its configuration): ask for its geometry with `cmd\|skeleton` when it is not the one you have |
+| `skeletonDamage` | one digit per skeleton segment, `0` intact .. `9` badly bent or broken (the game's detailed damage app scale), `""` = intact. Sent at most 4 times a second when it changes and every 2 s; keep the last one |
+
+**`skeleton`**: the vehicle structure seen from above (the beams of the
+game's detailed damage app), answer to `cmd|skeleton`, split into
+datagrams of 150 segments that can arrive in any order.
+
+```json
+{"type":"skeleton","id":"2412-1f3a","offset":150,"count":2412,
+ "seg":[-80,200,80,200, ...],
+ "wheels":{"FL":[-78,141,31,22]},"engine":[0,120]}
+```
+
+- Coordinates are integer **centimetres**, `x` to the right and `y`
+  forward of the vehicle reference node. `seg` holds `x1, y1, x2, y2` for
+  segments `offset` .. `offset + n - 1` of `count`; segment `i` is digit
+  `i` of `skeletonDamage`.
+- `wheels`: centre `x, y`, radius and width (cm) by wheel name. Tyre beams
+  are not in `seg`. `engine`: engine (or electric motor) position.
+- Missing datagrams: ask again with `cmd|skeleton`.
 
 **`ack`**: result of a command. Always sent on failure, on success only in
 debug mode.

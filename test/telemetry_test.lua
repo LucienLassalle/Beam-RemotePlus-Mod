@@ -83,3 +83,19 @@ t.describe('telemetry router: radar', function()
     t.assertContains(sent[1], '"radar":[{"heading":0,"length":4.5,"width":1.9,"x":0,"y":20}]')
   end)
 end)
+
+t.describe('telemetry router: skeleton', function()
+  t.it('sends the geometry to the v2 phones following that vehicle', function()
+    local telemetry, registry, _, sent = setup()
+    registry.connect('a', { version = 2 }).player = 0
+    registry.connect('b', { version = 1 }).player = 0
+    registry.connect('c', { version = 2 }).player = 1
+    telemetry.tick(registry)
+    local s = { id = '1-f', segments = { 0, 0, 10, 10 } }
+    t.assertEquals(telemetry.dispatchSkeleton(registry, 11, s), 1)
+    t.assertEquals(#sent, 1)
+    t.assertEquals(sent[1].ip, 'a')
+    t.assertContains(sent[1].payload, '"type":"skeleton"')
+    t.assertEquals(telemetry.dispatchSkeleton(registry, 11, 'garbage'), 0)
+  end)
+end)
