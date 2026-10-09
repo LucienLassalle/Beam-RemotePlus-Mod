@@ -51,6 +51,14 @@ t.describe('drivetrain parts', function()
   end)
 end)
 
+t.describe('gearbox synchronizers', function()
+  t.it('reports the most worn synchro', function()
+    t.assertEquals(drivetrain.synchroWear({ gearbox = { synchroWear = { 0, 0.123, 0.6 } } }), 0.6)
+    t.assertNil(drivetrain.synchroWear({ gearbox = { synchroWear = { 0, 0 } } }))
+    t.assertNil(drivetrain.synchroWear({ gearbox = { type = 'automaticGearbox' } }))
+  end)
+end)
+
 t.describe('engine position', function()
   local function p(y) return { x = 0, y = y, z = 0.5 } end
   -- Car facing -y (BeamNG convention): front bumper at y = -2, rear at 2.

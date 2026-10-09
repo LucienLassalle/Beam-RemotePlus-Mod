@@ -47,6 +47,21 @@ function M.clutch(devices)
   return temp, state
 end
 
+-- Worst synchronizer wear of the manual gearboxes (0..1, 1 = the gear
+-- cannot be engaged any more); nil without synchros or when unworn.
+function M.synchroWear(devices)
+  local worst
+  for _, d in pairs(devices or {}) do
+    if type(d) == 'table' and type(d.synchroWear) == 'table' then
+      for _, w in pairs(d.synchroWear) do
+        w = tonumber(w)
+        if w and w > 0 and (worst == nil or w > worst) then worst = w end
+      end
+    end
+  end
+  return worst and round(math.min(worst, 1), 2) or nil
+end
+
 -- Names of the broken powertrain devices (driveshaft, wheelaxleFL,
 -- gearbox, mainEngine...), sorted; nil when nothing is broken.
 function M.broken(devices)

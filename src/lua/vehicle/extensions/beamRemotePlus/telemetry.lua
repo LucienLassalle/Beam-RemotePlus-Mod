@@ -145,6 +145,8 @@ function M.collect(e, extra)
     lowPressure = anyFlag(e.lowpressure, e.oil),
     checkEngine = flag(e.checkengine),
     lowFuel = flag(e.lowfuel),
+    -- Air brakes of trucks and buses (pneumatics lowAirPressureWarning).
+    lowAirPressure = flag(e.lowAirPressure),
     hasAbs = flag(e.hasABS),
     absActive = flag(e.absActive),
     hasEsc = e.esc ~= nil or nil,
@@ -170,6 +172,7 @@ function M.collect(e, extra)
     clutchTemp = extra.clutchTemp,
     clutchState = extra.clutchState,
     brokenParts = extra.brokenParts,
+    gearboxWear = extra.gearboxWear,
     drivetrain = extra.drivetrain,
   }
   for k, v in pairs(extra.damage or {}) do t[k] = v end
@@ -312,6 +315,7 @@ function M.send()
       clutchTemp = clutchTemp,
       clutchState = clutchState,
       brokenParts = drivetrain.broken(devices),
+      gearboxWear = drivetrain.synchroWear(devices),
       wheelSpin = spin,
       wheelLock = lock,
       gx = sensors and sensors.gx2,
