@@ -115,11 +115,20 @@ provide it (show "n/a", do not assume 0).
 | `gx`, `gy`, `gz` | smoothed acceleration, m/s² |
 | `shiftLight` | bool |
 | `tirePressures` | object `{ "FL": kPa, "FR": kPa, ... }` |
+| `tirePressuresNominal` | same, the pressures set in the vehicle configuration (compare to them, race cars run low pressures) |
 | `driveMode` | object `{ "key": "...", "name": "..." }` |
 | `wheelSlip` | largest wheel slip velocity, m/s |
+| `wheelSpin`, `wheelLock` | largest wheelspin (tyre faster than the car) and locked-wheel slip, m/s |
+| `brakeTemps` | `{ "FL": °C, ... }` brake disc surface temperature |
+| `clutchTemp` | clutch temperature, °C (manual / DCT / centrifugal clutches only) |
+| `clutchState` | `hot`, `overheating` (slipping) or `damaged`; omitted when fine |
+| `brokenParts` | array of broken powertrain devices: `driveshaft`, `wheelaxleFL`, `mainEngine`... |
+| `drivetrain` | `{ "shafts": ["driveshaft", "wheelaxleRL", ...], "engineAt": 0..1 }` (0 = front bumper, 1 = rear) |
 | `bodyDamage` | `{ "FL": 0..1, "FR", "ML", "MR", "RL", "RR" }`, omitted when intact |
 | `engineDamage` | array of failures: `radiatorLeak`, `oilpanLeak`, `coolantOverheating`, `engineLockedUp`... |
-| `flatTires`, `hotBrakes` | arrays of wheel names |
+| `flatTires`, `hotBrakes` | arrays of wheel names (`hotBrakes` = brakes fading) |
+| `brokenBrakes`, `brokenWheels` | arrays of wheel names (molten brake, wheel torn off) |
+| `fuelLeak` | bool, fuel tank damaged |
 | `tyres` | `{ "FL": { "temp", "working", "condition", "brake", "surface"?, "core"? } }` (°C, condition % left), only with the *Tyre Thermals and Wear* mod |
 | `radar` | array of the 12 nearest cars within 50 m, nearest first: `{ "x": m right, "y": m ahead, "heading": ° relative, "length", "width" }` (`[]` when nobody is around) |
 | `player` | player index (0-based) |

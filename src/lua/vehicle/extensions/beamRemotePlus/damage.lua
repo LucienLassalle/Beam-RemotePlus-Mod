@@ -23,9 +23,10 @@ end
 
 -- getDamage(group, name) -> value (damageTracker.getDamage)
 -- wheelNames: { 'FL', 'FR', ... }
+-- tankNames: names of the fuel tank energy storages ({ 'mainTank' })
 -- Returns nil fields when nothing is damaged, so a pristine car costs
 -- nothing in the telemetry frame.
-function M.collect(getDamage, wheelNames)
+function M.collect(getDamage, wheelNames, tankNames)
   local result = {}
 
   local body, anyBody = {}, false
@@ -44,13 +45,22 @@ function M.collect(getDamage, wheelNames)
   end
   if #engine > 0 then result.engineDamage = engine end
 
-  local flat, hot = {}, {}
+  -- Flat tyre, fading brake (overheated), molten brake, wheel torn off.
+  local flat, hot, molten, lost = {}, {}, {}, {}
   for _, name in ipairs(wheelNames or {}) do
     if truthy(getDamage('wheels', 'tire' .. name)) then flat[#flat + 1] = name end
     if truthy(getDamage('wheels', 'brakeOverHeat' .. name)) then hot[#hot + 1] = name end
+    if truthy(getDamage('wheels', 'brake' .. name)) then molten[#molten + 1] = name end
+    if truthy(getDamage('wheels', name)) then lost[#lost + 1] = name end
   end
   if #flat > 0 then result.flatTires = flat end
   if #hot > 0 then result.hotBrakes = hot end
+  if #molten > 0 then result.brokenBrakes = molten end
+  if #lost > 0 then result.brokenWheels = lost end
+
+  for _, name in ipairs(tankNames or {}) do
+    if truthy(getDamage('energyStorage', name)) then result.fuelLeak = true end
+  end
   return result
 end
 
