@@ -38,13 +38,13 @@ def main():
     code = host = None
     for _ in range(10):
         for t in targets:
-            sock.sendto(b"beamngremoteplus|discover", (t, HOST_PORT))
+            sock.sendto(b"beamremoteplus|discover", (t, HOST_PORT))
         try:
             data, addr = sock.recvfrom(2048)
         except socket.timeout:
             continue
         msg = data.decode(errors="replace")
-        if msg.startswith("beamngremoteplus|hello|"):
+        if msg.startswith("beamremoteplus|hello|"):
             code, label = (msg.split("|", 3)[2:] + ["?"])[:2]
             host = addr[0]
             print(f"hello from {host}: code={code} label={label!r}")
@@ -54,7 +54,7 @@ def main():
 
     # 2. pairing
     role = "|display" if args.display else ""
-    ping = f"beamngremoteplus|ping|{code}|2|fake_phone.py{role}".encode()
+    ping = f"beamremoteplus|ping|{code}|2|fake_phone.py{role}".encode()
     version = None
     for _ in range(10):
         sock.sendto(ping, (host, HOST_PORT))
@@ -63,7 +63,7 @@ def main():
         except socket.timeout:
             continue
         msg = data.decode(errors="replace")
-        if msg.startswith(f"beamngremoteplus|pong|{code}"):
+        if msg.startswith(f"beamremoteplus|pong|{code}"):
             version = msg.split("|")[3]
             print(f"pong: protocol v{version}")
             break

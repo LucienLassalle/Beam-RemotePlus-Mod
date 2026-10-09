@@ -16,7 +16,8 @@ Thanks for helping! Issues and pull requests are welcome in **English or French*
 - **Tests**: every Lua module under `src/lua/ge/extensions/beamRemotePlus/` has a
   `test/<module>_test.lua`. Run them with `scripts/test_mod.sh` (needs `luajit`).
 - The project is licensed under **CC BY-NC-SA 4.0**: contributions are accepted
-  under the same license.
+  under the same license, with the additional permission for BeamNG GmbH
+  described in [BEAMNG-EULA.md](BEAMNG-EULA.md).
 
 ## Project layout
 
