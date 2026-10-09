@@ -145,4 +145,20 @@ function M.damage(skeleton, deformed)
   return table.concat(digits)
 end
 
+-- When the damage digits go out with the telemetry: computed every `every`
+-- frames at most, sent when they changed, and again every `repeatEvery`
+-- frames so a lost datagram or a phone connecting late catches up.
+-- Returns f(compute) -> digits to send, or nil.
+function M.damagePacer(every, repeatEvery)
+  local frame, last, lastFrame = 0, nil, nil
+  return function(compute)
+    frame = frame + 1
+    if frame % every ~= 0 then return nil end
+    local damage = compute()
+    if damage == last and frame - lastFrame < repeatEvery then return nil end
+    last, lastFrame = damage, frame
+    return damage
+  end
+end
+
 return M

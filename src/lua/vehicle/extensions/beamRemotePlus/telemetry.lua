@@ -13,9 +13,11 @@
 package.loaded['extensions/beamRemotePlus/damage'] = nil
 package.loaded['extensions/beamRemotePlus/tyres'] = nil
 package.loaded['extensions/beamRemotePlus/drivetrain'] = nil
+package.loaded['extensions/beamRemotePlus/skeleton'] = nil
 local damage = require('extensions/beamRemotePlus/damage')
 local tyres = require('extensions/beamRemotePlus/tyres')
 local drivetrain = require('extensions/beamRemotePlus/drivetrain')
+local skeleton = require('extensions/beamRemotePlus/skeleton')
 
 local M = {}
 
@@ -176,6 +178,8 @@ function M.collect(e, extra)
     drivetrain = extra.drivetrain,
     powertrain = extra.powertrain,
     motorPower = extra.motorPower,
+    skeleton = extra.skeleton,
+    skeletonDamage = extra.skeletonDamage,
   }
   for k, v in pairs(extra.damage or {}) do t[k] = v end
 
@@ -249,6 +253,35 @@ local function nodePos(cid)
   return node and node.pos or nil
 end
 
+-- The combustion engine of a hybrid, otherwise the (first) electric motor.
+local function engineNodeId(devices)
+  local engineNode
+  for _, d in pairs(devices) do
+    if type(d) == 'table' and d.engineNodeID and (engineNode == nil or d.type == 'combustionEngine') then
+      engineNode = d.engineNodeID
+    end
+  end
+  return engineNode
+end
+
+-- Top view of the vehicle structure, its wheels and engine (see
+-- skeleton.lua); the geometry itself is only sent when a phone asks.
+local function buildSkeleton(ref, engineNode)
+  local data = v and v.data
+  if not (data and ref) then return nil end
+  local project = skeleton.frame(nodePos(ref.ref), nodePos(ref.back), nodePos(ref.left))
+  local s = skeleton.build(data.nodes, data.beams, project)
+  if not s then return nil end
+  s.id = skeleton.id(s.segments)
+  s.wheels = skeleton.wheels(wheels and wheels.wheels, data.nodes, project)
+  local enginePos = nodePos(engineNode)
+  if enginePos then
+    local x, y = project(enginePos)
+    s.engine = { math.floor(x * 100 + 0.5), math.floor(y * 100 + 0.5) }
+  end
+  return s
+end
+
 -- What does not change while driving (computed once per vehicle VM: a new
 -- configuration respawns the vehicle and reloads this extension).
 local static = nil
@@ -262,13 +295,7 @@ local function readStatic()
   s.nominal = M.nominalPressures(v and v.data and v.data.triangles, groups)
 
   local devices = powertrainDevices()
-  -- The combustion engine of a hybrid, otherwise the (first) electric motor.
-  local engineNode
-  for _, d in pairs(devices) do
-    if type(d) == 'table' and d.engineNodeID and (engineNode == nil or d.type == 'combustionEngine') then
-      engineNode = d.engineNodeID
-    end
-  end
+  local engineNode = engineNodeId(devices)
   local ref = v and v.data and v.data.refNodes and v.data.refNodes[0]
   local positions = {}
   for _, node in pairs(v and v.data and v.data.nodes or {}) do
@@ -280,8 +307,19 @@ local function readStatic()
   }
   s.drivetrain = next(layout) and layout or nil
   s.powertrain = drivetrain.powertrainType(devices)
+  s.skeleton = buildSkeleton(ref, engineNode)
   static = s
   return static
+end
+
+-- Deformed beams go out at most ~4 times a second, like the game's app.
+local paceSkeletonDamage = skeleton.damagePacer(8, 60)
+
+local function readSkeletonDamage(s)
+  if not s then return nil end
+  return paceSkeletonDamage(function()
+    return skeleton.damage(s, beamstate and beamstate.deformedBeams)
+  end)
 end
 
 local function wheelSurfaceSpeeds()
@@ -335,6 +373,8 @@ function M.send()
       damage = readDamage(),
       tyres = tyres.read(),
       driveMode = readDriveMode(),
+      skeleton = fixed.skeleton and fixed.skeleton.id,
+      skeletonDamage = readSkeletonDamage(fixed.skeleton),
     }
     local t = M.collect(electrics.values, extra)
     obj:queueGameEngineLua(string.format(
@@ -343,6 +383,21 @@ function M.send()
   end)
   if not ok and log then
     log('W', 'beamRemotePlus', 'telemetry collection failed: ' .. tostring(err))
+  end
+end
+
+-- Geometry of the skeleton, on request of a phone (cmd|skeleton): too big
+-- for every telemetry frame, the GE side splits it into datagrams.
+function M.sendSkeleton()
+  local ok, err = pcall(function()
+    local s = readStatic().skeleton
+    if not s then return end
+    obj:queueGameEngineLua(string.format(
+      'if extensions.beamRemotePlus_main then extensions.beamRemotePlus_main.onSkeleton(%d, %s) end',
+      obj:getID(), serialize({ id = s.id, segments = s.segments, wheels = s.wheels, engine = s.engine })))
+  end)
+  if not ok and log then
+    log('W', 'beamRemotePlus', 'skeleton failed: ' .. tostring(err))
   end
 end
 
