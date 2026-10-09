@@ -15,6 +15,10 @@ M.ENGINE_FLAGS = {
   'starvedOfOil', 'oilLevelCritical', 'turbochargerDamaged',
   'superchargerDamaged', 'exhaustBroken', 'inductionSystemDamaged',
   'blockMelted', 'cylinderWallsMelted', 'catastrophicOverrevDamage',
+  'catastrophicOverTorqueDamage', 'mildOverrevDamage', 'mildOverTorqueDamage',
+  'engineReducedTorque', 'impactDamage', 'oilLevelTooHigh',
+  -- Live dangers (not damage yet): the game's own warnings.
+  'turbochargerHot', 'overRevDanger', 'overTorqueDanger', 'engineIsHydrolocking',
 }
 
 local function truthy(v)
@@ -61,6 +65,9 @@ function M.collect(getDamage, wheelNames, tankNames)
   for _, name in ipairs(tankNames or {}) do
     if truthy(getDamage('energyStorage', name)) then result.fuelLeak = true end
   end
+
+  -- Set for 2 s by the manual gearbox each time a shift grinds.
+  if truthy(getDamage('gearbox', 'synchroWear')) then result.gearGrinding = true end
   return result
 end
 

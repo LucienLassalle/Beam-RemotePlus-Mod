@@ -34,4 +34,11 @@ t.describe('vehicle damage summary', function()
     t.assertTrue(d.fuelLeak)
     t.assertNil(damage.collect(reader({}), { 'FL' }, { 'mainTank' }).fuelLeak)
   end)
+  t.it('relays the live engine dangers and grinding gears', function()
+    local d = damage.collect(reader({
+      ['engine.turbochargerHot'] = true, ['engine.overRevDanger'] = true, ['gearbox.synchroWear'] = true,
+    }), {})
+    t.assertEquals(#d.engineDamage, 2)
+    t.assertTrue(d.gearGrinding)
+  end)
 end)

@@ -123,9 +123,12 @@ provide it (show "n/a", do not assume 0).
 | `clutchTemp` | clutch temperature, °C (manual / DCT / centrifugal clutches only) |
 | `clutchState` | `hot`, `overheating` (slipping) or `damaged`; omitted when fine |
 | `brokenParts` | array of broken powertrain devices: `driveshaft`, `wheelaxleFL`, `mainEngine`... |
+| `gearboxWear` | worst synchronizer wear of a manual gearbox, 0..1 (1 = gear lost); omitted when unworn |
+| `gearGrinding` | bool, a shift just ground the gears (set for 2 s by the game) |
+| `lowAirPressure` | bool, air brakes pressure low (trucks, buses) |
 | `drivetrain` | `{ "shafts": ["driveshaft", "wheelaxleRL", ...], "engineAt": 0..1 }` (0 = front bumper, 1 = rear) |
 | `bodyDamage` | `{ "FL": 0..1, "FR", "ML", "MR", "RL", "RR" }`, omitted when intact |
-| `engineDamage` | array of failures: `radiatorLeak`, `oilpanLeak`, `coolantOverheating`, `engineLockedUp`... |
+| `engineDamage` | array of failures: `radiatorLeak`, `oilpanLeak`, `coolantOverheating`, `engineLockedUp`..., and the live dangers `turbochargerHot`, `overRevDanger`, `overTorqueDanger`, `engineIsHydrolocking` |
 | `flatTires`, `hotBrakes` | arrays of wheel names (`hotBrakes` = brakes fading) |
 | `brokenBrakes`, `brokenWheels` | arrays of wheel names (molten brake, wheel torn off) |
 | `fuelLeak` | bool, fuel tank damaged |
