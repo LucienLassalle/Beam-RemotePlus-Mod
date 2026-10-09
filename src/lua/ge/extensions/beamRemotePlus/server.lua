@@ -176,7 +176,7 @@ function M.new(deps)
     local name, arg = protocol.parseCommand(data)
     if not name then return end
     local ok, err, canonical
-    if client.display and name ~= 'debug' then
+    if client.display and not commandsModule.DISPLAY_COMMANDS[name] then
       ok, err, canonical = false, 'display_only', name
     else
       ok, err, canonical = commands.execute(client, name, arg)
@@ -224,6 +224,10 @@ function M.new(deps)
 
   function self.onTelemetry(vehicleId, t)
     return telemetry.dispatch(clients, vehicleId, t)
+  end
+
+  function self.onSkeleton(vehicleId, s)
+    return telemetry.dispatchSkeleton(clients, vehicleId, s)
   end
 
   -- Per-frame work ----------------------------------------------------------

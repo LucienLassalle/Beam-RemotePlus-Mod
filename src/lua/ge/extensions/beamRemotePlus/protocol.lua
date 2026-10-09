@@ -228,6 +228,30 @@ function M.buildTelemetryMessage(t)
   return json.encode(msg)
 end
 
+-- Segments per skeleton datagram: ~3 KB, well under the IP fragment count
+-- a Wi-Fi link loses often.
+M.SKELETON_SEGMENTS_PER_MESSAGE = 150
+
+-- Splits a vehicle skeleton ({ id, segments = { x1, y1, x2, y2, ... },
+-- wheels, engine }, see the vehicle extension skeleton.lua) into
+-- datagrams. Each one stands alone (offset + total count), so the app
+-- assembles them in any order and asks again for what was lost.
+function M.buildSkeletonMessages(s, perMessage)
+  if type(s) ~= 'table' or type(s.id) ~= 'string' or type(s.segments) ~= 'table' then return {} end
+  perMessage = perMessage or M.SKELETON_SEGMENTS_PER_MESSAGE
+  local count = math.floor(#s.segments / 4)
+  local messages = {}
+  for offset = 0, count - 1, perMessage do
+    local seg = {}
+    for i = offset * 4 + 1, math.min(offset + perMessage, count) * 4 do seg[#seg + 1] = s.segments[i] end
+    messages[#messages + 1] = json.encode({
+      type = 'skeleton', id = s.id, offset = offset, count = count, seg = seg,
+      wheels = s.wheels, engine = s.engine,
+    })
+  end
+  return messages
+end
+
 -- error: short machine-readable reason (e.g. "no_vehicle"), shown verbatim
 -- by the app's debug overlay.
 function M.buildAckMessage(command, ok, error)

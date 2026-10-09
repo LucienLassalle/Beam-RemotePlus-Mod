@@ -142,6 +142,13 @@ local function onTelemetry(vehicleId, snapshot)
   if not ok then logger.throttled('telemetry', 3000, 'W', 'telemetry dropped: ' .. tostring(err)) end
 end
 
+-- Called from the vehicle VM when a phone asked for the skeleton geometry.
+local function onSkeleton(vehicleId, skeleton)
+  if not server then return end
+  local ok, err = pcall(server.onSkeleton, vehicleId, skeleton)
+  if not ok then logger.warn('skeleton dropped: ' .. tostring(err)) end
+end
+
 local function setEnabled(enabled) if server then server.setEnabled(enabled) end end
 local function toggleEnabled() if server then server.setEnabled(not server.isEnabled()) end end
 local function setDebug(enabled) if server then server.setDebug(enabled) end end
@@ -155,6 +162,7 @@ M.onExtensionUnloaded = onExtensionUnloaded
 M.onUpdate = onUpdate
 M.onInputBindingsChanged = onInputBindingsChanged
 M.onTelemetry = onTelemetry
+M.onSkeleton = onSkeleton
 M.setEnabled = setEnabled
 M.toggleEnabled = toggleEnabled
 M.setDebug = setDebug
