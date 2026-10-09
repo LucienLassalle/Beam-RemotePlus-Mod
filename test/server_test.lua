@@ -34,7 +34,7 @@ local function setup(opts)
     notify = function(text, kind) env.toasts[#env.toasts + 1] = { text = text, kind = kind } end,
     publishState = function(state) env.states[#env.states + 1] = state end,
     getSecurityCode = function() if opts.noCode then return nil end return CODE end,
-    getHostLabel = function() return 'BeamNG of Test' end,
+    getHostLabel = function() return "Test's PC" end,
     getVehicle = function() return env.vehicle end,
     switchVehicle = function() return true end,
     cycleCamera = function() return true end,
@@ -97,7 +97,7 @@ t.describe('server: pairing', function()
     local env = setup()
     env.transport.push(protocol.DISCOVER_MESSAGE, '10.0.0.9')
     env.server.update()
-    t.assertEquals(env.transport.lastTo('10.0.0.9'), 'beamngremoteplus|hello|20367|BeamNG of Test')
+    t.assertEquals(env.transport.lastTo('10.0.0.9'), "beamngremoteplus|hello|20367|Test's PC")
   end)
   t.it('ignores discovery when no code is available', function()
     local env = setup({ noCode = true })

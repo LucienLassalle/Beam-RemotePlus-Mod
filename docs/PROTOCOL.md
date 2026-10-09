@@ -18,7 +18,7 @@ phone → broadcast:4446   beamngremoteplus|discover
 PC    → phone:4447       beamngremoteplus|hello|<code>|<label>
 ```
 
-`<label>` is a readable PC name ("BeamNG of Loka"), never contains `|`.
+`<label>` is a readable PC name ("Loka's PC"), never contains `|`.
 
 ## 2. Pairing (ping / pong)
 

@@ -7,7 +7,7 @@
   "beamRemotePlus.toast.enabled": "Connexion des téléphones activée",
   "beamRemotePlus.toast.disabled": "Connexion des téléphones désactivée",
   "beamRemotePlus.toast.portBusy": "Le port UDP {port} est déjà utilisé : les téléphones ne peuvent pas se connecter",
-  "beamRemotePlus.label.host": "BeamNG de {name}",
+  "beamRemotePlus.label.host": "PC de {name}",
   "beamRemotePlus.app.name": "Beam-RemotePlus",
   "beamRemotePlus.app.description": "Contrôle par téléphone : activation, code d'appairage et téléphones connectés",
   "beamRemotePlus.app.enable": "Autoriser la connexion des téléphones",

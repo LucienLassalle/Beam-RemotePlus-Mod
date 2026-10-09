@@ -16,7 +16,7 @@ M.FALLBACK = {
   ['beamRemotePlus.toast.enabled'] = 'Phone connections enabled',
   ['beamRemotePlus.toast.disabled'] = 'Phone connections disabled',
   ['beamRemotePlus.toast.portBusy'] = 'UDP port {port} is already in use: phones cannot connect',
-  ['beamRemotePlus.label.host'] = 'BeamNG of {name}',
+  ['beamRemotePlus.label.host'] = "{name}'s PC",
 }
 
 -- Replaces {name} placeholders; unknown placeholders are left untouched so a
