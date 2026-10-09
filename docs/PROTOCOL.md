@@ -100,7 +100,7 @@ provide it (show "n/a", do not assume 0).
 | `gearIndex`, `maxGearIndex` | int (-1 = R, 0 = N) |
 | `gearboxMode` | string |
 | `fuel` | 0..1 |
-| `fuelVolume`, `fuelCapacity` | litres |
+| `fuelVolume`, `fuelCapacity` | litres (kWh for electric cars) |
 | `waterTemp`, `oilTemp`, `envTemp` | °C |
 | `boost` | turbo boost as reported by the game |
 | `engineRunning` | bool |
@@ -123,6 +123,8 @@ provide it (show "n/a", do not assume 0).
 | `clutchTemp` | clutch temperature, °C (manual / DCT / centrifugal clutches only) |
 | `clutchState` | `hot`, `overheating` (slipping) or `damaged`; omitted when fine |
 | `brokenParts` | array of broken powertrain devices: `driveshaft`, `wheelaxleFL`, `mainEngine`... |
+| `powertrain` | `combustion`, `electric` or `hybrid`. For electric cars `fuel` is the battery charge (0..1) and `fuelVolume` / `fuelCapacity` are in kWh, as the game reports them |
+| `motorPower` | power of the electric motors, kW (negative = regenerative braking) |
 | `gearboxWear` | worst synchronizer wear of a manual gearbox, 0..1 (1 = gear lost); omitted when unworn |
 | `gearGrinding` | bool, a shift just ground the gears (set for 2 s by the game) |
 | `lowAirPressure` | bool, air brakes pressure low (trucks, buses) |

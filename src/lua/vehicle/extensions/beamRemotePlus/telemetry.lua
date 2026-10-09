@@ -174,6 +174,8 @@ function M.collect(e, extra)
     brokenParts = extra.brokenParts,
     gearboxWear = extra.gearboxWear,
     drivetrain = extra.drivetrain,
+    powertrain = extra.powertrain,
+    motorPower = extra.motorPower,
   }
   for k, v in pairs(extra.damage or {}) do t[k] = v end
 
@@ -260,9 +262,12 @@ local function readStatic()
   s.nominal = M.nominalPressures(v and v.data and v.data.triangles, groups)
 
   local devices = powertrainDevices()
+  -- The combustion engine of a hybrid, otherwise the (first) electric motor.
   local engineNode
   for _, d in pairs(devices) do
-    if type(d) == 'table' and d.engineNodeID then engineNode = d.engineNodeID break end
+    if type(d) == 'table' and d.engineNodeID and (engineNode == nil or d.type == 'combustionEngine') then
+      engineNode = d.engineNodeID
+    end
   end
   local ref = v and v.data and v.data.refNodes and v.data.refNodes[0]
   local positions = {}
@@ -274,6 +279,7 @@ local function readStatic()
     engineAt = ref and drivetrain.engineAt(nodePos(engineNode), nodePos(ref.ref), nodePos(ref.back), positions),
   }
   s.drivetrain = next(layout) and layout or nil
+  s.powertrain = drivetrain.powertrainType(devices)
   static = s
   return static
 end
@@ -312,6 +318,8 @@ function M.send()
     local extra = {
       tirePressuresNominal = fixed.nominal,
       drivetrain = fixed.drivetrain,
+      powertrain = fixed.powertrain,
+      motorPower = drivetrain.motorPower(devices),
       clutchTemp = clutchTemp,
       clutchState = clutchState,
       brokenParts = drivetrain.broken(devices),
