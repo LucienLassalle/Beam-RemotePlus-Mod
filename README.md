@@ -7,7 +7,7 @@
 Drive [BeamNG.drive®](https://www.beamng.com/) with your phone: tilt
 steering, analog pedals, live dashboard, vehicle buttons and damage view.
 
-**Beam-RemotePlus** (not "BeamNG-RemotePlus") is a **community project**: a
+**Beam-RemotePlus** is a **community project**: a
 free, open source mod and app made by players. It is **not an official
 BeamNG product** and is not affiliated with, endorsed or supported by
 BeamNG GmbH. It replaces BeamNG's former phone controller,
