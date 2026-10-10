@@ -55,12 +55,15 @@ same keys.
 ## Testing in game
 
 ```bash
-scripts/deploy_local.sh   # builds, copies into the user mods folder, hot-reloads
+scripts/build_mod.sh   # dist/Beam-RemotePlus.zip
 ```
 
-`deploy_local.sh` finds the Proton prefix of the Steam game automatically
-(pass the user folder otherwise). Then check the mod end to end without the
-app:
+Copy `dist/Beam-RemotePlus.zip` into the `mods/` folder of your BeamNG.drive
+user folder (on Windows `%LOCALAPPDATA%\BeamNG\BeamNG.drive\current\mods`,
+or the same path inside the Proton prefix on Linux), replacing any previous
+copy. BeamNG keeps the zip it mounted in memory: restart the game, or
+disable and enable the mod in the mod manager, to run the new code. Then
+check the mod end to end without the app:
 
 ```bash
 scripts/fake_phone.py --show rpm --show radar --show tyres

@@ -2,7 +2,7 @@
 # Packages src/ into dist/Beam-RemotePlus.zip, ready for BeamNG's mods/ folder.
 #
 # Usage: scripts/build_mod.sh [version]
-#   version (the release tag, e.g. v0.0.3, a leading "v" is stripped) is
+#   version (the release tag, e.g. v0.0.3-0.39, a leading "v" is stripped) is
 #   written into server.lua and the UI app (both say "dev" in the sources);
 #   the release workflow passes the tag. Without it the sources are packaged
 #   as they are. The archive is reproducible: fixed timestamps, sorted entries.

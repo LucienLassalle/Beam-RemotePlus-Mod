@@ -54,9 +54,19 @@ Phones can be blocked at any time with the **Enable Beam-RemotePlus
 
 ## Network
 
-The mod only talks to phones on your local network, never to the internet.
-It listens on UDP port **4446** and answers on the phone's port **4447**;
-allow them in your firewall if the phone cannot find the PC.
+The mod only talks to phones on your local network, never to the internet,
+and connects to no server.
+
+- It listens on UDP port **4446** on all the PC's network interfaces, so a
+  phone finds the PC whether it uses the Wi-Fi, the Ethernet network or the
+  phone's own hotspot. It answers on the phone's UDP port **4447**.
+- A phone drives only after sending the 5-digit pairing code shown in the
+  game. **Automatic connection** gets that code from the mod, so any device
+  on the same local network can connect: use a network you trust.
+- Phones are allowed by default and can be blocked at any time (see
+  [Installation](#installation)); the mod then closes port 4446.
+- Windows may ask to allow BeamNG.drive through the firewall on first
+  launch. Allow ports 4446 and 4447 if the phone cannot find the PC.
 
 ## Optional: tyre temperatures
 
@@ -69,15 +79,15 @@ tyre. Nothing changes for that mod, and nothing is sent without it.
 ```bash
 scripts/test_mod.sh         # unit tests (luajit)
 scripts/build_mod.sh        # dist/Beam-RemotePlus.zip
-scripts/deploy_local.sh     # build + copy to the local game + hot reload
 scripts/fake_phone.py       # talk to the running game like the app does
 ```
 
 - Architecture and how to add a command or a language: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Wire protocol: [docs/PROTOCOL.md](docs/PROTOCOL.md)
-- Releasing: publish a GitHub release with a `vX.Y.Z` tag. CI builds the
-  zip with that version (the sources only say `dev`) and attaches it with
-  SBOMs (SPDX + CycloneDX) and checksums.
+- Releasing: publish a GitHub release tagged
+  `v<mod version>-<BeamNG.drive version>` (e.g. `v0.0.3-0.39`). CI builds
+  the zip with that version (the sources only say `dev`) and attaches it
+  with SBOMs (SPDX + CycloneDX) and checksums.
 
 ## License
 

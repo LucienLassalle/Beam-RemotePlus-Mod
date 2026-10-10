@@ -6,7 +6,7 @@
 
 local MODULE_DIR = '/lua/ge/extensions/beamRemotePlus/'
 local SIBLINGS = { 'json', 'protocol', 'config', 'i18n', 'logger', 'clients',
-  'commands', 'radar', 'telemetry', 'transport', 'server', 'devReload' }
+  'commands', 'radar', 'telemetry', 'transport', 'server' }
 
 -- require() caches by path independently of extensions.reload(): without
 -- this, reloading the mod would keep running stale sibling modules.
@@ -17,7 +17,6 @@ local i18nModule = require(MODULE_DIR .. 'i18n')
 local loggerModule = require(MODULE_DIR .. 'logger')
 local transportModule = require(MODULE_DIR .. 'transport')
 local serverModule = require(MODULE_DIR .. 'server')
-local devReload = require(MODULE_DIR .. 'devReload')
 local radar = require(MODULE_DIR .. 'radar')
 
 local M = {}
@@ -121,7 +120,6 @@ end
 -- Global safety net: whatever happens, an error must never disable the
 -- whole extension (and with it the phone controls).
 local function onUpdate()
-  if devReload.check() then return end
   if not server then return end
   local ok, err = pcall(server.update)
   if not ok then logger.throttled('update', 3000, 'E', 'update error (recovered): ' .. tostring(err)) end
