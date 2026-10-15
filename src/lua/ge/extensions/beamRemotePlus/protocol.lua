@@ -290,6 +290,11 @@ function M.buildSessionMessage(info)
   return json.encode(msg)
 end
 
+-- Sent to a phone the player kicked, right before its session is closed.
+function M.buildKickedMessage()
+  return json.encode({ type = 'kicked' })
+end
+
 -- Timeouts ------------------------------------------------------------------
 
 function M.isClientTimedOut(now, lastSeen, timeoutMs)

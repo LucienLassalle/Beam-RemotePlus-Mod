@@ -151,6 +151,7 @@ local function setDebug(enabled) if server then server.setDebug(enabled) end end
 local function toggleDebug() if server then server.setDebug(not server.state().debug) end end
 local function setLocked(value) if server then server.setLocked(value) end end
 local function toggleLocked() if server then server.setLocked(not server.isLocked()) end end
+local function kick(ip) if server then server.kick(ip) end end
 local function requestState()
   if server then guihooks.trigger('BeamRemotePlusState', server.state()) end
 end
@@ -165,6 +166,7 @@ M.setDebug = setDebug
 M.toggleDebug = toggleDebug
 M.setLocked = setLocked
 M.toggleLocked = toggleLocked
+M.kick = kick
 M.requestState = requestState
 
 return M

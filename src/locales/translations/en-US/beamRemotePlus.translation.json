@@ -7,6 +7,7 @@
   "beamRemotePlus.toast.portBusy": "UDP port {port} is already in use: phones cannot connect",
   "beamRemotePlus.toast.locked": "New phones locked out: connected phones keep driving",
   "beamRemotePlus.toast.unlocked": "New phones can connect again",
+  "beamRemotePlus.toast.phoneKicked": "Phone kicked: {device}",
   "beamRemotePlus.label.host": "{name}'s PC",
   "beamRemotePlus.app.name": "Beam-RemotePlus",
   "beamRemotePlus.app.description": "Phone remote control (needs the Beam-RemotePlus Android app): pairing code, lock on new phones and connected phones",

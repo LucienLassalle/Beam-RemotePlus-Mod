@@ -184,6 +184,15 @@ switched on.
 {"type":"session","modVersion":"0.0.3","player":0,"commands":["cam_next", "..."]}
 ```
 
+**`kicked`**: the player removed this phone from the in-game panel. The
+session is already closed on the mod side: the app must stop pinging (it
+would reconnect at once otherwise) and go back to its pairing screen. The
+phone may pair again later, unless new phones are locked out.
+
+```json
+{"type":"kicked"}
+```
+
 ### Version 1: binary telemetry (36 bytes)
 
 Nine little-endian `float32`: speed (m/s), rpm, redline rpm, gear (0 = R,

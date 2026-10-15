@@ -123,6 +123,20 @@ function M.new(deps)
     publish()
   end
 
+  -- Kick = disconnect now. The phone may pair again (unless locked): v2
+  -- apps are told so they stop reconnecting on their own; v1 apps cannot
+  -- be told and reconnect at their next ping.
+  function self.kick(ip)
+    local client = clients.get(ip)
+    if not client then return false end
+    if client.version >= 2 then send(client, protocol.buildKickedMessage()) end
+    clients.disconnect(ip, releaseHold)
+    log.info('phone kicked: ' .. client.deviceName .. ' (' .. ip .. ')')
+    deps.notify(deps.i18n.t('beamRemotePlus.toast.phoneKicked', { device = client.deviceName }), 'warning')
+    publish()
+    return true
+  end
+
   function self.shutdown() stopListening() end
 
   -- Packet handlers ---------------------------------------------------------
