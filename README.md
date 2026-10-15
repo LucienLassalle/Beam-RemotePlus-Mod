@@ -57,16 +57,54 @@ Phones can be blocked at any time with the **Enable Beam-RemotePlus
 The mod only talks to phones on your local network, never to the internet,
 and connects to no server.
 
-- It listens on UDP port **4446** on all the PC's network interfaces, so a
-  phone finds the PC whether it uses the Wi-Fi, the Ethernet network or the
-  phone's own hotspot. It answers on the phone's UDP port **4447**.
+Two UDP ports are open on the PC, on all its network interfaces, so a
+phone finds the PC whether it uses the Wi-Fi, the Ethernet network or the
+phone's own hotspot:
+
+| Port | Opened by | Receives |
+|---|---|---|
+| UDP **4446** | the mod | discovery, ping, controls, commands |
+| UDP **4444** | the game's own remote control (`core_remoteController`), started by the mod to get the pairing code (when a level loads, by default) | the app's pairing handshake |
+
+The mod answers each phone on the address the request came from. The ports
+used on the phone are described in the
+[app README](https://github.com/LucienLassalle/Beam-RemotePlus-Mobile#network).
+
+```mermaid
+flowchart LR
+    phone["Phone<br/>(Beam-RemotePlus app)"]
+    subgraph pc["PC: BeamNG.drive"]
+        mod["Beam-RemotePlus mod<br/>UDP 4446"]
+        native["Game remote control<br/>UDP 4444"]
+        mod -- "reads the pairing code" --> native
+    end
+    phone -- "discovery, ping,<br/>controls, commands" --> mod
+    mod -- "hello, pong,<br/>telemetry, events" --> phone
+    phone -- "pairing handshake" --> native
+```
+
 - A phone drives only after sending the 5-digit pairing code shown in the
   game. **Automatic connection** gets that code from the mod, so any device
   on the same local network can connect: use a network you trust.
 - Phones are allowed by default and can be blocked at any time (see
-  [Installation](#installation)); the mod then closes port 4446.
+  [Installation](#installation)); the mod then closes port 4446. Port 4444
+  belongs to the game and stays open until it quits.
 - Windows may ask to allow BeamNG.drive through the firewall on first
-  launch. Allow ports 4446 and 4447 if the phone cannot find the PC.
+  launch. If the phone cannot find the PC, allow **incoming UDP 4444 and
+  4446**, for example in an administrator PowerShell:
+
+  ```powershell
+  New-NetFirewallRule -DisplayName "Beam-RemotePlus" -Direction Inbound -Protocol UDP -LocalPort 4444,4446 -Action Allow
+  ```
+
+  If **Cancel** was clicked on the Windows prompt, Windows created *block*
+  rules for BeamNG.drive, and a block rule always wins over an allow rule.
+  List them, then remove them (Windows asks again on the next launch):
+
+  ```powershell
+  Get-NetFirewallRule -Direction Inbound -Action Block | Where-Object DisplayName -Match "BeamNG"
+  Get-NetFirewallRule -Direction Inbound -Action Block | Where-Object DisplayName -Match "BeamNG" | Remove-NetFirewallRule
+  ```
 
 ## Optional: tyre temperatures
 
