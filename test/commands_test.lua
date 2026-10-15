@@ -186,3 +186,13 @@ t.describe('commands: Push-to-Pass of vehicle mods', function()
     t.assertEquals(values.p2p_toggle, 1)
   end)
 end)
+
+t.describe('commands: pit limiter of vehicle mods', function()
+  t.it('fr04: toggles pitLimiter like its key, even before it exists', function()
+    local commands, client, vehicle = setup()
+    t.assertTrue(commands.execute(client, 'pit_limiter'))
+    local values = {}
+    runOnVehicle(vehicle.commands[1], { electrics = { values = values } })
+    t.assertEquals(values.pitLimiter, 1)
+  end)
+end)

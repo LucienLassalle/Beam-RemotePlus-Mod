@@ -190,6 +190,10 @@ function M.collect(e, extra)
     hasPushToPass = e.p2p_duration ~= nil or nil,
     pushToPass = onlyIf(e.p2p_duration ~= nil, (finite(e.p2p_active) or 0) > 0),
     pushToPassLeft = e.p2p_duration ~= nil and round(e.p2p_timeLeft, 1) or nil,
+    -- Pit limiter of the fr04 (fr04PitLimiter, whose electric only exists
+    -- after the first reset, hence the extension check).
+    hasPitLimiter = (e.pitLimiter ~= nil or extra.hasPitLimiter) or nil,
+    pitLimiter = onlyIf(e.pitLimiter ~= nil or extra.hasPitLimiter, (finite(e.pitLimiter) or 0) > 0),
     tirePressures = extra.tirePressures,
     tirePressuresNominal = extra.tirePressuresNominal,
     wheelSlip = round(extra.wheelSlip, 2),
@@ -335,6 +339,7 @@ local function readStatic()
   s.powertrain = drivetrain.powertrainType(devices)
   s.skeleton = buildSkeleton(ref, engineNode)
   s.hasLightbar, s.hasSiren = M.emergencyEquipment(controller and controller.getControllersByType, v and v.data)
+  s.hasPitLimiter = extensions and extensions.isExtensionLoaded and extensions.isExtensionLoaded('fr04PitLimiter') or nil
   static = s
   return static
 end
@@ -455,6 +460,7 @@ function M.send()
       driveMode = M.driveMode(controller and controller.getController),
       hasLightbar = fixed.hasLightbar,
       hasSiren = fixed.hasSiren,
+      hasPitLimiter = fixed.hasPitLimiter,
       skeleton = fixed.skeleton and fixed.skeleton.id,
       skeletonDamage = readSkeletonDamage(fixed.skeleton),
     }
