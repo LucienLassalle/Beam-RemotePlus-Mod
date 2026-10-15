@@ -55,6 +55,13 @@ local function anyFlag(...)
   return result
 end
 
+-- value when the vehicle has the feature, nil (omitted) otherwise; unlike
+-- `cond and value or nil`, keeps a false value.
+local function onlyIf(cond, value)
+  if cond then return value end
+  return nil
+end
+
 local function round(v, decimals)
   v = finite(v)
   if v == nil then return nil end
@@ -179,6 +186,10 @@ function M.collect(e, extra)
     -- DRS of vehicle mods (see the drs command): CF26 drs_toggle, FR17 DRS_on.
     hasDrs = (e.drs_toggle ~= nil or e.DRS_manual ~= nil) or nil,
     drsOpen = M.drsOpen(e),
+    -- Push-to-Pass of the CF26 (p2pStuff controller): active, seconds left.
+    hasPushToPass = e.p2p_duration ~= nil or nil,
+    pushToPass = onlyIf(e.p2p_duration ~= nil, (finite(e.p2p_active) or 0) > 0),
+    pushToPassLeft = e.p2p_duration ~= nil and round(e.p2p_timeLeft, 1) or nil,
     tirePressures = extra.tirePressures,
     tirePressuresNominal = extra.tirePressuresNominal,
     wheelSlip = round(extra.wheelSlip, 2),

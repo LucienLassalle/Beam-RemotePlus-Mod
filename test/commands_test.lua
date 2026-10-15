@@ -176,3 +176,13 @@ t.describe('commands: DRS of vehicle mods', function()
     t.assertNil(v.DRS)
   end)
 end)
+
+t.describe('commands: Push-to-Pass of vehicle mods', function()
+  t.it('CF26: toggles p2p_toggle like its key', function()
+    local commands, client, vehicle = setup()
+    t.assertTrue(commands.execute(client, 'push_to_pass'))
+    local values = {}
+    runOnVehicle(vehicle.commands[1], { electrics = { values = values } })
+    t.assertEquals(values.p2p_toggle, 1)
+  end)
+end)
