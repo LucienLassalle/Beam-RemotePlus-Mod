@@ -89,3 +89,28 @@ t.describe('vehicle telemetry collect()', function()
     t.assertFalse(vehicleTelemetry.collect({ lowpressure = 0 }).lowPressure)
   end)
 end)
+
+t.describe('vehicle telemetry driveMode()', function()
+  local function controllers(list) return function(name) return list[name] end end
+  local driveModes = {
+    getCurrentDriveModeKey = function() return 'sport' end,
+    getDriveModeData = function() return { name = 'Sport' } end,
+  }
+  local esc = { getCurrentConfigData = function() return { name = 'Regular' } end }
+
+  t.it('reports the drive mode first', function()
+    local mode = vehicleTelemetry.driveMode(controllers({ driveModes = driveModes, esc = esc }))
+    t.assertEquals(mode.name, 'Sport')
+    t.assertNil(mode.esc)
+  end)
+  t.it('falls back to the ESC mode on vehicles without drive modes', function()
+    local mode = vehicleTelemetry.driveMode(controllers({ esc = esc }))
+    t.assertEquals(mode.name, 'Regular')
+    t.assertEquals(mode.key, 'esc:Regular')
+    t.assertTrue(mode.esc)
+  end)
+  t.it('reports nothing on vehicles with neither', function()
+    t.assertNil(vehicleTelemetry.driveMode(controllers({})))
+    t.assertNil(vehicleTelemetry.driveMode(nil))
+  end)
+end)

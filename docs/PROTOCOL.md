@@ -124,7 +124,7 @@ provide it (show "n/a", do not assume 0).
 | `shiftLight` | bool |
 | `tirePressures` | object `{ "FL": kPa, "FR": kPa, ... }` |
 | `tirePressuresNominal` | same, the pressures set in the vehicle configuration (compare to them, race cars run low pressures) |
-| `driveMode` | object `{ "key": "...", "name": "..." }` |
+| `driveMode` | object `{ "key": "...", "name": "..." }`: drive mode, or the ESC mode (`"esc": true`) on vehicles without drive modes |
 | `wheelSlip` | largest wheel slip velocity, m/s |
 | `wheelSpin`, `wheelLock` | largest wheelspin (tyre faster than the car) and locked-wheel slip, m/s |
 | `brakeTemps` | `{ "FL": °C, ... }` brake disc surface temperature |

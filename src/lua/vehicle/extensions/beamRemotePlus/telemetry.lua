@@ -332,13 +332,23 @@ local function wheelSurfaceSpeeds()
   return speeds
 end
 
-local function readDriveMode()
-  local driveModes = controller and controller.getController and controller.getController('driveModes')
-  if not driveModes then return nil end
-  local key = driveModes.getCurrentDriveModeKey and driveModes.getCurrentDriveModeKey()
-  local data = key and driveModes.getDriveModeData and driveModes.getDriveModeData(key)
-  if not data then return nil end
-  return { key = tostring(key), name = data.name and tostring(data.name) or tostring(key) }
+-- Current drive mode ("Comfort", "Sport"...), or for vehicles without drive
+-- modes the ESC mode ("Regular", "Off"...): the esc_mode command switches
+-- whichever the vehicle has, and the phone shows it on its button.
+-- getController: the vehicle's controller.getController (injected for tests).
+function M.driveMode(getController)
+  if not getController then return nil end
+  local driveModes = getController('driveModes')
+  if driveModes then
+    local key = driveModes.getCurrentDriveModeKey and driveModes.getCurrentDriveModeKey()
+    local data = key and driveModes.getDriveModeData and driveModes.getDriveModeData(key)
+    if not data then return nil end
+    return { key = tostring(key), name = data.name and tostring(data.name) or tostring(key) }
+  end
+  local esc = getController('esc')
+  local config = esc and esc.getCurrentConfigData and esc.getCurrentConfigData()
+  if type(config) ~= 'table' or not config.name then return nil end
+  return { key = 'esc:' .. tostring(config.name), name = tostring(config.name), esc = true }
 end
 
 function M.onExtensionLoaded()
@@ -372,7 +382,7 @@ function M.send()
       wheelSlip = maxWheelSlip(),
       damage = readDamage(),
       tyres = tyres.read(),
-      driveMode = readDriveMode(),
+      driveMode = M.driveMode(controller and controller.getController),
       skeleton = fixed.skeleton and fixed.skeleton.id,
       skeletonDamage = readSkeletonDamage(fixed.skeleton),
     }
