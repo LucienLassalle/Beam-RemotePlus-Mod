@@ -26,6 +26,7 @@ longer maintained.
 - Vehicle functions from the phone: horn, lights, indicators, hazards,
   parking brake, ignition, drive mode, gearbox mode, cruise control, gears,
   recovery, vehicle and camera switching.
+- In-game panel: connected players, lock out new phones, kick a phone.
 - Second-screen phones (display only) and local multiplayer (one phone per
   player).
 - English and French.
@@ -51,6 +52,19 @@ longer maintained.
 New phones can be locked out at any time with the **Beam-RemotePlus: lock
 out new phones** action (Options > Controls > General) or the optional
 **Beam-RemotePlus** UI app; phones already connected keep driving.
+
+## In-game panel
+
+The optional **Beam-RemotePlus** UI app (UI apps menu, BeamNG.drive 0.39 or
+newer) shows:
+
+- the pairing code;
+- **Lock out new phones**: phones already connected keep driving, new ones
+  cannot pair (until the game restarts);
+- every connected phone with its player number (*Player 1*, *Player 2*…)
+  or *Second screen*, and a red cross to **kick** it after confirmation.
+  A kicked phone goes back to its pairing screen and may connect again
+  later, unless new phones are locked out.
 
 ## Network
 
@@ -87,7 +101,7 @@ flowchart LR
   game. **Automatic connection** gets that code from the mod, so any device
   on the same local network can connect: use a network you trust.
 - New phones are allowed by default and can be locked out at any time (see
-  [Installation](#installation)): the mod then ignores them, port 4446
+  [In-game panel](#in-game-panel)): the mod then ignores them, port 4446
   stays open for the phones already connected. Port 4444 belongs to the
   game and stays open until it quits.
 - Windows may ask to allow BeamNG.drive through the firewall on first
