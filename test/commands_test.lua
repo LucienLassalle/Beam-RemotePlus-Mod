@@ -117,3 +117,37 @@ t.describe('commands: special', function()
     t.assertTrue(#names > 20)
   end)
 end)
+
+-- Runs the code a command queued on the vehicle against fake vehicle globals.
+local function runOnVehicle(code, globals)
+  local chunk = assert(loadstring(code))
+  setfenv(chunk, setmetatable(globals, { __index = _G }))
+  chunk()
+end
+
+-- The game's lightbar: 0 off, 1 lights, 2 lights + siren.
+local function fakeElectrics(lightbar)
+  local e = { values = { lightbar = lightbar } }
+  function e.set_lightbar_signal(state) e.values.lightbar = state end
+  return e
+end
+
+t.describe('commands: emergency lights and siren', function()
+  local function after(command, lightbar)
+    local commands, client, vehicle = setup()
+    t.assertTrue(commands.execute(client, command))
+    local electrics = fakeElectrics(lightbar)
+    runOnVehicle(vehicle.commands[1], { electrics = electrics })
+    return electrics.values.lightbar
+  end
+  t.it('flashers switch the lights on and off, siren included', function()
+    t.assertEquals(after('flashers', 0), 1)
+    t.assertEquals(after('flashers', 1), 0)
+    t.assertEquals(after('flashers', 2), 0)
+  end)
+  t.it('the siren needs the lights and keeps them when switched off', function()
+    t.assertEquals(after('siren', 0), 2)
+    t.assertEquals(after('siren', 1), 2)
+    t.assertEquals(after('siren', 2), 1)
+  end)
+end)

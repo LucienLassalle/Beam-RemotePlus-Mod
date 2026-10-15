@@ -164,6 +164,11 @@ function M.collect(e, extra)
     gz = round(extra.gz, 3),
     envTemp = round(extra.envTemp, 1),
     driveMode = extra.driveMode,
+    -- Emergency lights and siren: only for vehicles fitted with them (every
+    -- vehicle has a lightbar electric).
+    hasLightbar = extra.hasLightbar or nil,
+    hasSiren = extra.hasSiren or nil,
+    lightbar = (extra.hasLightbar or extra.hasSiren) and finite(e.lightbar) or nil,
     tirePressures = extra.tirePressures,
     tirePressuresNominal = extra.tirePressuresNominal,
     wheelSlip = round(extra.wheelSlip, 2),
@@ -308,6 +313,7 @@ local function readStatic()
   s.drivetrain = next(layout) and layout or nil
   s.powertrain = drivetrain.powertrainType(devices)
   s.skeleton = buildSkeleton(ref, engineNode)
+  s.hasLightbar, s.hasSiren = M.emergencyEquipment(controller and controller.getControllersByType, v and v.data)
   static = s
   return static
 end
@@ -372,6 +378,28 @@ function M.driveModeColor(data)
   return nil
 end
 
+-- Police, ambulance, fire or pace car equipment: a lightbar controller
+-- (current lightbar parts) or a prop lit by the lightbar electric (older
+-- ones), and a "siren" sound. getControllersByType: the vehicle's
+-- controller.getControllersByType; data: v.data (injected for tests).
+function M.emergencyEquipment(getControllersByType, data)
+  local lightbar = false
+  if getControllersByType then
+    local list = getControllersByType('lightbar')
+    lightbar = type(list) == 'table' and next(list) ~= nil
+  end
+  if not lightbar and type(data) == 'table' then
+    for _, prop in pairs(type(data.props) == 'table' and data.props or {}) do
+      if type(prop) == 'table' and prop.func == 'lightbar' then
+        lightbar = true
+        break
+      end
+    end
+  end
+  local siren = type(data) == 'table' and type(data.soundscape) == 'table' and data.soundscape.siren ~= nil
+  return lightbar, siren
+end
+
 function M.onExtensionLoaded()
   if gui then tyres.install(gui) end
 end
@@ -404,6 +432,8 @@ function M.send()
       damage = readDamage(),
       tyres = tyres.read(),
       driveMode = M.driveMode(controller and controller.getController),
+      hasLightbar = fixed.hasLightbar,
+      hasSiren = fixed.hasSiren,
       skeleton = fixed.skeleton and fixed.skeleton.id,
       skeletonDamage = readSkeletonDamage(fixed.skeleton),
     }

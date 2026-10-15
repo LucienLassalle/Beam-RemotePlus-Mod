@@ -41,6 +41,10 @@ M.PRESS_ACTIONS = {
   cruise_off = "extensions.use('cruiseControl').setEnabled(false)",
   cruise_up = "extensions.use('cruiseControl').changeSpeed(1/3.6)",
   cruise_down = "extensions.use('cruiseControl').changeSpeed(-1/3.6)",
+  -- Emergency lights and siren share the game's lightbar state (0 off,
+  -- 1 lights, 2 lights + siren): the siren never sounds without the lights.
+  flashers = 'electrics.set_lightbar_signal((electrics.values.lightbar or 0) > 0 and 0 or 1)',
+  siren = 'electrics.set_lightbar_signal((electrics.values.lightbar or 0) == 2 and 1 or 2)',
 }
 
 -- What a second-screen phone may still ask: they read, never drive.

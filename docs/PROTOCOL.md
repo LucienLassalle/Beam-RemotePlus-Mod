@@ -80,6 +80,8 @@ cmd|<name>|1 / |0     hold commands (pressed / released)
 | `esc_mode` | press | next drive mode / ESC mode |
 | `shifter_mode` | press | cycle gearbox modes |
 | `cruise_set`, `cruise_resume`, `cruise_off`, `cruise_up`, `cruise_down` | press | cruise control |
+| `flashers` | press | emergency lights on / off (off also stops the siren) |
+| `siren` | press | siren on / off (on also switches the emergency lights on) |
 | `gear_up`, `gear_down` | press | sequential shift |
 | `next_vehicle`, `prev_vehicle` | press | switch vehicle (player's own) |
 | `cam_next`, `cam_prev` | press | camera |
@@ -119,6 +121,8 @@ provide it (show "n/a", do not assume 0).
 | `hasAbs`, `absActive`, `hasEsc`, `escActive`, `hasTcs`, `tcsActive` | bool |
 | `cruiseActive` | bool |
 | `cruiseSpeed` | m/s |
+| `hasLightbar`, `hasSiren` | `true` when the vehicle is fitted with emergency lights / a siren (police, ambulance, fire, pace car), omitted otherwise |
+| `lightbar` | `0` off, `1` emergency lights, `2` lights + siren (fitted vehicles only) |
 | `odometer`, `trip` | metres |
 | `gx`, `gy`, `gz` | smoothed acceleration, m/s² |
 | `shiftLight` | bool |
