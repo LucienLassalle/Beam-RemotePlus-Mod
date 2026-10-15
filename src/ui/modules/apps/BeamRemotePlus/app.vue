@@ -11,7 +11,16 @@
   <div class="brp-root">
     <div class="brp-header">
       <span class="brp-title">{{ $t("beamRemotePlus.app.name") }}</span>
-      <span v-if="state.code" class="brp-code" :title="$t('beamRemotePlus.app.code')">{{ state.code }}</span>
+      <button
+        v-if="state.code"
+        type="button"
+        class="brp-code"
+        :class="{ 'brp-code-shown': codeShown }"
+        :title="$t(codeShown ? 'beamRemotePlus.app.codeHide' : 'beamRemotePlus.app.codeShow')"
+        @click="codeShown = !codeShown">
+        <BngIcon :type="codeShown ? 'eyeSolidOpened' : 'eyeSolidClosed'" color="var(--bng-off-black)" />
+        <span class="brp-code-digits">{{ codeShown ? state.code : maskedCode }}</span>
+      </button>
     </div>
 
     <div v-if="state.port && !state.listening" class="brp-alert">
@@ -71,6 +80,11 @@ const events = useEvents()
 
 const state = ref({ listening: false, locked: false, debug: false, phones: [], version: "" })
 const phones = computed(() => state.value.phones || [])
+
+// The pairing code lets anyone on the network drive: hidden until clicked
+// (streams, screenshots), hidden again on a second click.
+const codeShown = ref(false)
+const maskedCode = computed(() => Array.from(String(state.value.code || "")).map(() => "X").join(" "))
 
 // The extension may not be loaded yet (or anymore): never raise a Lua error.
 // Arguments are booleans and IP strings, written the same in JSON and Lua.
@@ -135,13 +149,38 @@ onMounted(() => {
 }
 
 .brp-code {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex: 0 0 auto;
   padding: 0.125rem 0.5rem;
+  border: 0;
   border-radius: var(--bng-corners-1);
   background-color: var(--bng-orange-b400);
   color: var(--bng-off-black);
   font-family: var(--fnt-mono);
+  font-size: inherit;
   font-weight: 700;
   letter-spacing: 0.1em;
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity 0.15s, box-shadow 0.15s;
+
+  // Hover / keyboard focus: tells the player the chip is a button.
+  &:hover,
+  &:focus-visible {
+    opacity: 1;
+    box-shadow: 0 0 0 2px var(--bng-off-white);
+    outline: none;
+  }
+
+  &.brp-code-shown {
+    opacity: 1;
+  }
+}
+
+.brp-code-digits {
+  white-space: nowrap;
 }
 
 .brp-alert {
