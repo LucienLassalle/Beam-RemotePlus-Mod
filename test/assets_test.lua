@@ -40,7 +40,7 @@ t.describe('assets: translations', function()
   end)
   t.it('input actions and UI app only use translated keys', function()
     for _, path in ipairs({ 'lua/ge/extensions/core/input/actions/beamRemotePlus.json',
-      'ui/modules/apps/BeamRemotePlus/app.json', 'ui/modules/apps/BeamRemotePlus/app.js' }) do
+      'ui/modules/apps/BeamRemotePlus/app.json', 'ui/modules/apps/BeamRemotePlus/app.vue' }) do
       for key in read(path):gmatch('[\'"]((ui%.inputActions%.beamRemotePlus[%w%.]+))[\'"]') do
         t.assertTrue(en[key], path .. ' uses untranslated ' .. key)
       end
