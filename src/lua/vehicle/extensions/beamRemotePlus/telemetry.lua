@@ -74,6 +74,13 @@ function M.gearLabel(gear)
   return tostring(gear)
 end
 
+-- Whether the DRS wing of a vehicle mod is open (nil without DRS).
+function M.drsOpen(e)
+  if e.drs_toggle ~= nil then return flag(e.drs_toggle) end
+  if e.DRS_manual ~= nil then return positive(e.DRS_on) == true end
+  return nil
+end
+
 local PSI_TO_KPA = 6.894757
 
 -- Pressure each tyre was inflated to in the vehicle configuration (kPa,
@@ -169,6 +176,9 @@ function M.collect(e, extra)
     hasLightbar = extra.hasLightbar or nil,
     hasSiren = extra.hasSiren or nil,
     lightbar = (extra.hasLightbar or extra.hasSiren) and finite(e.lightbar) or nil,
+    -- DRS of vehicle mods (see the drs command): CF26 drs_toggle, FR17 DRS_on.
+    hasDrs = (e.drs_toggle ~= nil or e.DRS_manual ~= nil) or nil,
+    drsOpen = M.drsOpen(e),
     tirePressures = extra.tirePressures,
     tirePressuresNominal = extra.tirePressuresNominal,
     wheelSlip = round(extra.wheelSlip, 2),

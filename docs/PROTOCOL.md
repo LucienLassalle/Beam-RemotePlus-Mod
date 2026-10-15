@@ -82,6 +82,7 @@ cmd|<name>|1 / |0     hold commands (pressed / released)
 | `cruise_set`, `cruise_resume`, `cruise_off`, `cruise_up`, `cruise_down` | press | cruise control |
 | `flashers` | press | emergency lights on / off (off also stops the siren) |
 | `siren` | press | siren on / off (on also switches the emergency lights on) |
+| `drs` | press | opens / closes the DRS wing of the vehicle mods that have one (CF26, FR17) |
 | `gear_up`, `gear_down` | press | sequential shift |
 | `next_vehicle`, `prev_vehicle` | press | switch vehicle (player's own) |
 | `cam_next`, `cam_prev` | press | camera |
@@ -123,6 +124,7 @@ provide it (show "n/a", do not assume 0).
 | `cruiseSpeed` | m/s |
 | `hasLightbar`, `hasSiren` | `true` when the vehicle is fitted with emergency lights / a siren (police, ambulance, fire, pace car), omitted otherwise |
 | `lightbar` | `0` off, `1` emergency lights, `2` lights + siren (fitted vehicles only) |
+| `hasDrs`, `drsOpen` | DRS of the vehicle mods that have one (CF26, FR17): present, wing open |
 | `odometer`, `trip` | metres |
 | `gx`, `gy`, `gz` | smoothed acceleration, m/s² |
 | `shiftLight` | bool |
