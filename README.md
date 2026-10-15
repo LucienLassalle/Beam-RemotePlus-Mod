@@ -25,7 +25,8 @@ longer maintained.
   of the cars around.
 - Vehicle functions from the phone: horn, lights, indicators, hazards,
   parking brake, ignition, drive mode, gearbox mode, cruise control, gears,
-  recovery, vehicle and camera switching.
+  recovery, vehicle and camera switching, and on police cars, ambulances,
+  fire trucks and pace cars the emergency lights and siren.
 - In-game panel: connected players, lock out new phones, kick a phone.
 - Second-screen phones (display only) and local multiplayer (one phone per
   player).
@@ -127,6 +128,21 @@ flowchart LR
 With the **Tyre Thermals and Wear** mod (by Luuk, on the BeamNG.drive
 repository) enabled, the phone also shows the temperature and wear of each
 tyre. Nothing changes for that mod, and nothing is sent without it.
+
+## Optional: vehicle mods
+
+Some vehicle mods add their own controls. When the player drives one of
+them, the phone also offers these controls (F4 theme); with any other
+vehicle nothing changes, and none of these mods is needed:
+
+| Vehicle mod (BeamNG.drive repository) | Controls on the phone |
+|---|---|
+| **CF26** (F3 configurations of the fr04) | DRS, Push-to-Pass, pit limiter |
+| **F4** by LucasBE (fr04) | pit limiter |
+| **FR17** | DRS (switches it to its manual mode) |
+
+The mod uses the same vehicle values as these mods' own keys and changes
+none of their files.
 
 ## Development
 
