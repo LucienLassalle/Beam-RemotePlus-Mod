@@ -7,6 +7,7 @@
   "beamRemotePlus.toast.portBusy": "Le port UDP {port} est déjà utilisé : les téléphones ne peuvent pas se connecter",
   "beamRemotePlus.toast.locked": "Nouveaux téléphones bloqués : ceux déjà connectés continuent de jouer",
   "beamRemotePlus.toast.unlocked": "Les nouveaux téléphones peuvent de nouveau se connecter",
+  "beamRemotePlus.toast.nativeOpen": "Impossible de bloquer la télécommande du jeu (UDP 4444) : de nouveaux téléphones peuvent encore s'y appairer",
   "beamRemotePlus.toast.phoneKicked": "Téléphone exclu : {device}",
   "beamRemotePlus.label.host": "PC de {name}",
   "beamRemotePlus.app.name": "Beam-RemotePlus",

@@ -16,6 +16,7 @@ M.FALLBACK = {
   ['beamRemotePlus.toast.portBusy'] = 'UDP port {port} is already in use: phones cannot connect',
   ['beamRemotePlus.toast.locked'] = 'New phones locked out: connected phones keep driving',
   ['beamRemotePlus.toast.unlocked'] = 'New phones can connect again',
+  ['beamRemotePlus.toast.nativeOpen'] = 'The game remote control (UDP 4444) could not be locked: new phones can still pair through it',
   ['beamRemotePlus.toast.phoneKicked'] = 'Phone kicked: {device}',
   ['beamRemotePlus.label.host'] = "{name}'s PC",
 }

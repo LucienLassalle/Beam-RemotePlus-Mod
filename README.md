@@ -78,7 +78,7 @@ phone's own hotspot:
 | Port | Opened by | Receives |
 |---|---|---|
 | UDP **4446** | the mod | discovery, ping, controls, commands |
-| UDP **4444** | the game's own remote control (`core_remoteController`), started by the mod to get the pairing code (when a level loads, by default) | the app's pairing handshake |
+| UDP **4444** | the game's own remote control (`core_remoteController`), opened by the mod; pairs no new phone while they are locked out | the app's pairing handshake |
 
 The mod answers each phone on the address the request came from. The ports
 used on the phone are described in the
@@ -102,8 +102,9 @@ flowchart LR
   on the same local network can connect: use a network you trust.
 - New phones are allowed by default and can be locked out at any time (see
   [In-game panel](#in-game-panel)): the mod then ignores them, port 4446
-  stays open for the phones already connected. Port 4444 belongs to the
-  game and stays open until it quits.
+  stays open for the phones already connected. Port 4444 accepts the same
+  pairing code, so the mod also stops it from pairing new phones (even if
+  the game's own "use a phone or tablet" option was ticked) until unlocked.
 - Windows may ask to allow BeamNG.drive through the firewall on first
   launch. If the phone cannot find the PC, allow **incoming UDP 4444 and
   4446**, for example in an administrator PowerShell:

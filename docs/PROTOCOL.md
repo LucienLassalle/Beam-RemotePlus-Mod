@@ -8,8 +8,9 @@ All messages are UDP datagrams on the local network.
 | PC → phone | **4447** | hello, pong, telemetry, events |
 
 The game's native remote control (`core_remoteController`, UDP 4444)
-provides the **pairing code**: the mod reuses its 5-digit code, and reading
-it opens port 4444 in the game.
+provides the **pairing code**: the mod reuses its 5-digit code. Its port
+accepts the same code: while new phones are locked out, the mod refuses the
+virtual device it creates for a new phone, so that phone gets no answer.
 
 **Handshake prefix.** Discovery and pairing messages start with
 `beamremoteplus|`. Apps up to 0.0.3 use `beamngremoteplus|`. The mod accepts

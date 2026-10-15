@@ -30,6 +30,8 @@ deps:
   switchVehicle(player, dir)  -> ok, err
   cycleCamera(player, offset) -> ok, err
   onDeviceCreated()           optional, forces an input device rescan
+  nativeRemote                optional nativeRemote.new(...) instance: the
+                              game's own remote control (UDP 4444)
 ]]
 function M.new(deps)
   local self = {}
@@ -42,6 +44,12 @@ function M.new(deps)
   -- Locked: new phones are refused, connected ones keep driving. Session
   -- only (never saved), so a restart never leaves phones locked out.
   local locked = false
+  -- The game's own remote control accepts the same pairing code: kept in
+  -- sync with the lock and checked again every second, in case the game
+  -- reloaded the module the lock relies on.
+  local NATIVE_SYNC_MS = 1000
+  local lastNativeSync = nil
+  local nativeWarned = false
 
   local function send(client, payload)
     deps.transport.send(payload, client.ip, protocol.CLIENT_PORT)
@@ -113,11 +121,32 @@ function M.new(deps)
     publish()
   end
 
+  -- Open while new phones are allowed (the apps pair through it first);
+  -- while they are locked out, it cannot pair new phones either.
+  local function syncNative()
+    local native = deps.nativeRemote
+    if not native then return end
+    lastNativeSync = deps.clock()
+    local ok, enforced = pcall(native.setLocked, locked)
+    if not locked then
+      nativeWarned = false
+      pcall(native.open)
+      return
+    end
+    if ok and enforced then return end
+    if not nativeWarned then
+      nativeWarned = true
+      log.warn('cannot lock the game remote control (UDP 4444): ' .. tostring(enforced))
+      deps.notify(deps.i18n.t('beamRemotePlus.toast.nativeOpen'), 'error')
+    end
+  end
+
   function self.setLocked(value)
     value = value and true or false
     if locked == value then return end
     locked = value
     log.info(locked and 'new phones locked out' or 'new phones allowed again')
+    syncNative()
     deps.notify(deps.i18n.t(locked and 'beamRemotePlus.toast.locked' or 'beamRemotePlus.toast.unlocked'),
       locked and 'warning' or 'info')
     publish()
@@ -260,7 +289,9 @@ function M.new(deps)
   function self.update()
     if not startListening() then return end
 
-    -- Opens the native remote-control socket and shows the code once: the
+    if lastNativeSync == nil or deps.clock() - lastNativeSync >= NATIVE_SYNC_MS then syncNative() end
+
+    -- Shows the pairing code once: the
     -- game's own QR UI is unreliable since 0.39.
     if not pairingToastShown and deps.config.get('showPairingToast') then
       local code = deps.getSecurityCode()

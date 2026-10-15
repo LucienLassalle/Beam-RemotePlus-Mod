@@ -20,6 +20,14 @@ local function setup(opts)
     rescans = 0,
   }
   env.transport.failOpen = opts.portBusy
+  env.native = { isOpen = false, locked = false, lockCalls = 0 }
+  function env.native.open() env.native.isOpen = true return true end
+  function env.native.setLocked(value)
+    env.native.lockCalls = env.native.lockCalls + 1
+    if opts.nativeCannotLock and value then return false end
+    env.native.locked = value
+    return true
+  end
   local config = configModule.new(env.files)
   config.load()
   local logger, logLines = fakes.logger()
@@ -39,6 +47,7 @@ local function setup(opts)
     switchVehicle = function() return true end,
     cycleCamera = function() return true end,
     onDeviceCreated = function() env.rescans = env.rescans + 1 end,
+    nativeRemote = env.native,
   })
   return env
 end
@@ -170,6 +179,45 @@ t.describe('server: lock', function()
     env.server.setLocked(false)
     connect(env, '10.0.0.3')
     t.assertEquals(env.server.clients.count(), 1)
+  end)
+end)
+
+t.describe('server: game remote control', function()
+  t.it('keeps it open and unlocked while new phones are allowed', function()
+    local env = setup()
+    env.server.update()
+    t.assertTrue(env.native.isOpen)
+    t.assertFalse(env.native.locked)
+  end)
+  t.it('locks it with new phones, unlocks it with them, port kept open', function()
+    local env = setup()
+    env.server.update()
+    env.server.setLocked(true)
+    t.assertTrue(env.native.locked)
+    t.assertTrue(env.native.isOpen)
+    env.server.setLocked(false)
+    t.assertFalse(env.native.locked)
+    t.assertTrue(env.native.isOpen)
+  end)
+  t.it('checks the lock again every second', function()
+    local env = setup()
+    env.server.setLocked(true)
+    local calls = env.native.lockCalls
+    env.clock.advance(500)
+    env.server.update()
+    t.assertEquals(env.native.lockCalls, calls)
+    env.clock.advance(600)
+    env.server.update()
+    t.assertEquals(env.native.lockCalls, calls + 1)
+  end)
+  t.it('warns once when it cannot be locked', function()
+    local env = setup({ nativeCannotLock = true })
+    env.server.setLocked(true)
+    env.clock.advance(1100)
+    env.server.update()
+    local errors = 0
+    for _, toast in ipairs(env.toasts) do if toast.kind == 'error' then errors = errors + 1 end end
+    t.assertEquals(errors, 1)
   end)
 end)
 

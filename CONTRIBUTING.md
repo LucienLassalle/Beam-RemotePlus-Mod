@@ -25,6 +25,7 @@ Thanks for helping! Issues and pull requests are welcome in **English or French*
 |---|---|
 | `src/lua/ge/extensions/beamRemotePlus/main.lua` | Entry point: binds BeamNG globals to the modules below. |
 | `.../server.lua` | Packet routing, pairing, lock on new phones, timeouts. |
+| `.../nativeRemote.lua` | The game's own remote control: pairing code, no new phone paired while locked. |
 | `.../protocol.lua`, `json.lua` | Wire format (see [docs/PROTOCOL.md](docs/PROTOCOL.md)). |
 | `.../clients.lua` | Connected phones and their virtual input devices. |
 | `.../commands.lua` | Command table (horn, lights, cruise control...). |
