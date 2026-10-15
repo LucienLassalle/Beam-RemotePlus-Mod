@@ -1,5 +1,5 @@
--- Core of the mod: routes incoming datagrams, owns the enabled/disabled
--- state and the per-frame work. Every BeamNG API is injected by main.lua,
+-- Core of the mod: routes incoming datagrams, owns the lock on new phones
+-- and the per-frame work. Every BeamNG API is injected by main.lua,
 -- which keeps this file fully unit-testable (see test/server_test.lua).
 
 local protocol = require('/lua/ge/extensions/beamRemotePlus/protocol')
@@ -39,6 +39,9 @@ function M.new(deps)
   local lastDiscoverToast = 0
   local lastHeartbeat = 0
   local pairingToastShown = false
+  -- Locked: new phones are refused, connected ones keep driving. Session
+  -- only (never saved), so a restart never leaves phones locked out.
+  local locked = false
 
   local function send(client, payload)
     deps.transport.send(payload, client.ip, protocol.CLIENT_PORT)
@@ -63,8 +66,8 @@ function M.new(deps)
 
   self.clients = clients
 
-  function self.isEnabled() return deps.config.get('enabled') end
   function self.isListening() return listening end
+  function self.isLocked() return locked end
 
   function self.state()
     local phones = {}
@@ -73,8 +76,8 @@ function M.new(deps)
     end)
     return {
       version = M.VERSION,
-      enabled = self.isEnabled(),
       listening = listening,
+      locked = locked,
       debug = deps.config.get('debug'),
       code = listening and deps.getSecurityCode() or nil,
       port = protocol.HOST_PORT,
@@ -104,21 +107,19 @@ function M.new(deps)
     publish()
   end
 
-  function self.setEnabled(enabled)
-    deps.config.set('enabled', enabled and true or false)
-    if enabled then
-      startListening()
-      deps.notify(deps.i18n.t('beamRemotePlus.toast.enabled'), 'info')
-    else
-      stopListening()
-      deps.notify(deps.i18n.t('beamRemotePlus.toast.disabled'), 'warning')
-    end
-    publish()
-  end
-
   function self.setDebug(enabled)
     deps.config.set('debug', enabled and true or false)
     log.debugEnabled = enabled and true or false
+    publish()
+  end
+
+  function self.setLocked(value)
+    value = value and true or false
+    if locked == value then return end
+    locked = value
+    log.info(locked and 'new phones locked out' or 'new phones allowed again')
+    deps.notify(deps.i18n.t(locked and 'beamRemotePlus.toast.locked' or 'beamRemotePlus.toast.unlocked'),
+      locked and 'warning' or 'info')
     publish()
   end
 
@@ -127,6 +128,11 @@ function M.new(deps)
   -- Packet handlers ---------------------------------------------------------
 
   local function handleDiscover(ip, data)
+    -- Locked: the PC must not hand its pairing code to new phones.
+    if locked then
+      log.throttled('locked:' .. ip, 5000, 'I', 'discover from ' .. ip .. ' ignored: new phones are locked out')
+      return
+    end
     local code = deps.getSecurityCode()
     if not code then
       log.warn('discover from ' .. ip .. ' ignored: pairing code unavailable')
@@ -145,6 +151,10 @@ function M.new(deps)
     local code = deps.getSecurityCode()
     if not protocol.pingMatchesCode(data, code) then
       log.warn('ping from ' .. ip .. ' rejected (wrong or unavailable pairing code)')
+      return
+    end
+    if locked and not clients.get(ip) then
+      log.throttled('locked:' .. ip, 5000, 'I', 'ping from ' .. ip .. ' ignored: new phones are locked out')
       return
     end
     local ping = protocol.parsePing(data)
@@ -234,7 +244,6 @@ function M.new(deps)
   -- Per-frame work ----------------------------------------------------------
 
   function self.update()
-    if not self.isEnabled() then return end
     if not startListening() then return end
 
     -- Opens the native remote-control socket and shows the code once: the

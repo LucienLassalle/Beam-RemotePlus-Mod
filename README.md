@@ -48,9 +48,9 @@ longer maintained.
 3. Install the Android app, put the phone on the same network, load a level
    and tap **Automatic connection** in the app.
 
-Phones can be blocked at any time with the **Enable Beam-RemotePlus
-(phones)** action (Options > Controls > General) or the optional
-**Beam-RemotePlus** UI app.
+New phones can be locked out at any time with the **Beam-RemotePlus: lock
+out new phones** action (Options > Controls > General) or the optional
+**Beam-RemotePlus** UI app; phones already connected keep driving.
 
 ## Network
 
@@ -86,9 +86,10 @@ flowchart LR
 - A phone drives only after sending the 5-digit pairing code shown in the
   game. **Automatic connection** gets that code from the mod, so any device
   on the same local network can connect: use a network you trust.
-- Phones are allowed by default and can be blocked at any time (see
-  [Installation](#installation)); the mod then closes port 4446. Port 4444
-  belongs to the game and stays open until it quits.
+- New phones are allowed by default and can be locked out at any time (see
+  [Installation](#installation)): the mod then ignores them, port 4446
+  stays open for the phones already connected. Port 4444 belongs to the
+  game and stays open until it quits.
 - Windows may ask to allow BeamNG.drive through the firewall on first
   launch. If the phone cannot find the PC, allow **incoming UDP 4444 and
   4446**, for example in an administrator PowerShell:

@@ -13,9 +13,9 @@ M.FALLBACK = {
   ['beamRemotePlus.toast.autoPairing'] = 'Automatic pairing with {ip}…',
   ['beamRemotePlus.toast.phoneConnected'] = 'Phone connected: {device} (player {player})',
   ['beamRemotePlus.toast.phoneDisconnected'] = 'Phone disconnected: {device}',
-  ['beamRemotePlus.toast.enabled'] = 'Phone connections enabled',
-  ['beamRemotePlus.toast.disabled'] = 'Phone connections disabled',
   ['beamRemotePlus.toast.portBusy'] = 'UDP port {port} is already in use: phones cannot connect',
+  ['beamRemotePlus.toast.locked'] = 'New phones locked out: connected phones keep driving',
+  ['beamRemotePlus.toast.unlocked'] = 'New phones can connect again',
   ['beamRemotePlus.label.host'] = "{name}'s PC",
 }
 

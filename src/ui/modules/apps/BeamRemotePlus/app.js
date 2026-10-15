@@ -1,16 +1,16 @@
-// In-game panel of the Beam-RemotePlus mod: enable switch, pairing code and
+// In-game panel of the Beam-RemotePlus mod: lock on new phones, pairing code and
 // connected phones. Add it from the UI apps menu (it is optional: phones can
-// connect as soon as the mod is enabled, which is the default).
+// connect as soon as the mod is installed).
 angular.module('beamng.apps')
 .directive('beamRemotePlus', [function () {
   return {
     template: `
       <div class="brp-root">
         <label class="brp-row brp-switch">
-          <input type="checkbox" ng-model="state.enabled" ng-change="setEnabled(state.enabled)">
-          <span>{{ 'beamRemotePlus.app.enable' | translate }}</span>
+          <input type="checkbox" ng-model="state.locked" ng-change="setLocked(state.locked)">
+          <span>{{ 'beamRemotePlus.app.lock' | translate }}</span>
         </label>
-        <div class="brp-row" ng-if="state.enabled && !state.listening" style="color:#ff8a65">
+        <div class="brp-row" ng-if="state.port && !state.listening" style="color:#ff8a65">
           {{ 'beamRemotePlus.app.portBusy' | translate }}
         </div>
         <div class="brp-row" ng-if="state.code">
@@ -33,7 +33,7 @@ angular.module('beamng.apps')
     link: function (scope, element) {
       element.css({ background: 'rgba(0,0,0,0.55)', color: '#fff', padding: '8px', 'font-size': '13px',
         'box-sizing': 'border-box', height: '100%', overflow: 'auto', 'border-radius': '4px' })
-      scope.state = { enabled: true, listening: false, phones: [], debug: false }
+      scope.state = { listening: false, locked: false, phones: [], debug: false }
 
       scope.$on('BeamRemotePlusState', function (event, state) {
         scope.$evalAsync(function () {
@@ -42,8 +42,8 @@ angular.module('beamng.apps')
         })
       })
 
-      scope.setEnabled = function (enabled) {
-        bngApi.engineLua('if extensions.beamRemotePlus_main then extensions.beamRemotePlus_main.setEnabled(' + (enabled ? 'true' : 'false') + ') end')
+      scope.setLocked = function (locked) {
+        bngApi.engineLua('if extensions.beamRemotePlus_main then extensions.beamRemotePlus_main.setLocked(' + (locked ? 'true' : 'false') + ') end')
       }
       scope.setDebug = function (enabled) {
         bngApi.engineLua('if extensions.beamRemotePlus_main then extensions.beamRemotePlus_main.setDebug(' + (enabled ? 'true' : 'false') + ') end')

@@ -24,7 +24,7 @@ Thanks for helping! Issues and pull requests are welcome in **English or French*
 | Path | Role |
 |---|---|
 | `src/lua/ge/extensions/beamRemotePlus/main.lua` | Entry point: binds BeamNG globals to the modules below. |
-| `.../server.lua` | Packet routing, pairing, enable switch, timeouts. |
+| `.../server.lua` | Packet routing, pairing, lock on new phones, timeouts. |
 | `.../protocol.lua`, `json.lua` | Wire format (see [docs/PROTOCOL.md](docs/PROTOCOL.md)). |
 | `.../clients.lua` | Connected phones and their virtual input devices. |
 | `.../commands.lua` | Command table (horn, lights, cruise control...). |
@@ -33,7 +33,7 @@ Thanks for helping! Issues and pull requests are welcome in **English or French*
 | `src/lua/vehicle/extensions/beamRemotePlus/telemetry.lua` | Runs inside the vehicle, collects the data. |
 | `.../damage.lua`, `tyres.lua` | Damage summary, optional Tyre Thermals and Wear integration. |
 | `.../config.lua`, `i18n.lua`, `logger.lua` | Settings file, translations, logs. |
-| `src/lua/ge/extensions/core/input/actions/beamRemotePlus.json` | "Enable Beam-RemotePlus" action in Options > Controls. |
+| `src/lua/ge/extensions/core/input/actions/beamRemotePlus.json` | "Lock out new phones" and debug actions in Options > Controls. |
 | `src/ui/modules/apps/BeamRemotePlus/` | Optional in-game UI app. |
 | `src/locales/translations/<lang>/` | In-game translations. |
 
