@@ -55,6 +55,13 @@ local function anyFlag(...)
   return result
 end
 
+-- value when the vehicle has the feature, nil (omitted) otherwise; unlike
+-- `cond and value or nil`, keeps a false value.
+local function onlyIf(cond, value)
+  if cond then return value end
+  return nil
+end
+
 local function round(v, decimals)
   v = finite(v)
   if v == nil then return nil end
@@ -72,6 +79,13 @@ function M.gearLabel(gear)
   end
   if gear == nil or gear == '' then return nil end
   return tostring(gear)
+end
+
+-- Whether the DRS wing of a vehicle mod is open (nil without DRS).
+function M.drsOpen(e)
+  if e.drs_toggle ~= nil then return flag(e.drs_toggle) end
+  if e.DRS_manual ~= nil then return positive(e.DRS_on) == true end
+  return nil
 end
 
 local PSI_TO_KPA = 6.894757
@@ -164,6 +178,22 @@ function M.collect(e, extra)
     gz = round(extra.gz, 3),
     envTemp = round(extra.envTemp, 1),
     driveMode = extra.driveMode,
+    -- Emergency lights and siren: only for vehicles fitted with them (every
+    -- vehicle has a lightbar electric).
+    hasLightbar = extra.hasLightbar or nil,
+    hasSiren = extra.hasSiren or nil,
+    lightbar = (extra.hasLightbar or extra.hasSiren) and finite(e.lightbar) or nil,
+    -- DRS of vehicle mods (see the drs command): CF26 drs_toggle, FR17 DRS_on.
+    hasDrs = (e.drs_toggle ~= nil or e.DRS_manual ~= nil) or nil,
+    drsOpen = M.drsOpen(e),
+    -- Push-to-Pass of the CF26 (p2pStuff controller): active, seconds left.
+    hasPushToPass = e.p2p_duration ~= nil or nil,
+    pushToPass = onlyIf(e.p2p_duration ~= nil, (finite(e.p2p_active) or 0) > 0),
+    pushToPassLeft = e.p2p_duration ~= nil and round(e.p2p_timeLeft, 1) or nil,
+    -- Pit limiter of the fr04 (fr04PitLimiter, whose electric only exists
+    -- after the first reset, hence the extension check).
+    hasPitLimiter = (e.pitLimiter ~= nil or extra.hasPitLimiter) or nil,
+    pitLimiter = onlyIf(e.pitLimiter ~= nil or extra.hasPitLimiter, (finite(e.pitLimiter) or 0) > 0),
     tirePressures = extra.tirePressures,
     tirePressuresNominal = extra.tirePressuresNominal,
     wheelSlip = round(extra.wheelSlip, 2),
@@ -308,6 +338,8 @@ local function readStatic()
   s.drivetrain = next(layout) and layout or nil
   s.powertrain = drivetrain.powertrainType(devices)
   s.skeleton = buildSkeleton(ref, engineNode)
+  s.hasLightbar, s.hasSiren = M.emergencyEquipment(controller and controller.getControllersByType, v and v.data)
+  s.hasPitLimiter = extensions and extensions.isExtensionLoaded and extensions.isExtensionLoaded('fr04PitLimiter') or nil
   static = s
   return static
 end
@@ -332,13 +364,66 @@ local function wheelSurfaceSpeeds()
   return speeds
 end
 
-local function readDriveMode()
-  local driveModes = controller and controller.getController and controller.getController('driveModes')
-  if not driveModes then return nil end
-  local key = driveModes.getCurrentDriveModeKey and driveModes.getCurrentDriveModeKey()
-  local data = key and driveModes.getDriveModeData and driveModes.getDriveModeData(key)
-  if not data then return nil end
-  return { key = tostring(key), name = data.name and tostring(data.name) or tostring(key) }
+-- Current drive mode ("Comfort", "Sport"...), or for vehicles without drive
+-- modes the ESC mode ("Regular", "Off"...): the esc_mode command switches
+-- whichever the vehicle has, and the phone shows it on its button, in the
+-- color the game gives that mode.
+-- getController: the vehicle's controller.getController (injected for tests).
+function M.driveMode(getController)
+  if not getController then return nil end
+  local driveModes = getController('driveModes')
+  if driveModes then
+    local key = driveModes.getCurrentDriveModeKey and driveModes.getCurrentDriveModeKey()
+    local data = key and driveModes.getDriveModeData and driveModes.getDriveModeData(key)
+    if not data then return nil end
+    return { key = tostring(key), name = data.name and tostring(data.name) or tostring(key), color = M.driveModeColor(data) }
+  end
+  local esc = getController('esc')
+  local config = esc and esc.getCurrentConfigData and esc.getCurrentConfigData()
+  if type(config) ~= 'table' or not config.name then return nil end
+  return { key = 'esc:' .. tostring(config.name), name = tostring(config.name), esc = true, color = M.hexColor(config.activeColor) }
+end
+
+-- "98FB00" style colors as the game writes them (no #), else nil.
+function M.hexColor(v)
+  if type(v) ~= 'string' then return nil end
+  local hex = v:gsub('^#', '')
+  if not hex:match('^%x%x%x%x%x%x$') then return nil end
+  return hex:upper()
+end
+
+-- Color of the drive mode's button in the game's own UI (its
+-- simpleControlButton setting), the same as the ESC mode color.
+function M.driveModeColor(data)
+  for _, setting in pairs(type(data.settings) == 'table' and data.settings or {}) do
+    if type(setting) == 'table' and setting.type == 'simpleControlButton' then
+      local color = M.hexColor(setting.color)
+      if color then return color end
+    end
+  end
+  return nil
+end
+
+-- Police, ambulance, fire or pace car equipment: a lightbar controller
+-- (current lightbar parts) or a prop lit by the lightbar electric (older
+-- ones), and a "siren" sound. getControllersByType: the vehicle's
+-- controller.getControllersByType; data: v.data (injected for tests).
+function M.emergencyEquipment(getControllersByType, data)
+  local lightbar = false
+  if getControllersByType then
+    local list = getControllersByType('lightbar')
+    lightbar = type(list) == 'table' and next(list) ~= nil
+  end
+  if not lightbar and type(data) == 'table' then
+    for _, prop in pairs(type(data.props) == 'table' and data.props or {}) do
+      if type(prop) == 'table' and prop.func == 'lightbar' then
+        lightbar = true
+        break
+      end
+    end
+  end
+  local siren = type(data) == 'table' and type(data.soundscape) == 'table' and data.soundscape.siren ~= nil
+  return lightbar, siren
 end
 
 function M.onExtensionLoaded()
@@ -372,7 +457,10 @@ function M.send()
       wheelSlip = maxWheelSlip(),
       damage = readDamage(),
       tyres = tyres.read(),
-      driveMode = readDriveMode(),
+      driveMode = M.driveMode(controller and controller.getController),
+      hasLightbar = fixed.hasLightbar,
+      hasSiren = fixed.hasSiren,
+      hasPitLimiter = fixed.hasPitLimiter,
       skeleton = fixed.skeleton and fixed.skeleton.id,
       skeletonDamage = readSkeletonDamage(fixed.skeleton),
     }

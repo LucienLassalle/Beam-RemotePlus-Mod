@@ -41,6 +41,20 @@ M.PRESS_ACTIONS = {
   cruise_off = "extensions.use('cruiseControl').setEnabled(false)",
   cruise_up = "extensions.use('cruiseControl').changeSpeed(1/3.6)",
   cruise_down = "extensions.use('cruiseControl').changeSpeed(-1/3.6)",
+  -- Emergency lights and siren share the game's lightbar state (0 off,
+  -- 1 lights, 2 lights + siren): the siren never sounds without the lights.
+  flashers = 'electrics.set_lightbar_signal((electrics.values.lightbar or 0) > 0 and 0 or 1)',
+  siren = 'electrics.set_lightbar_signal((electrics.values.lightbar or 0) == 2 and 1 or 2)',
+  -- DRS of vehicle mods, same electrics as their own keys. CF26 (fr04 F3):
+  -- drs_toggle opens / closes the wing. FR17: DRS = 1 selects the manual
+  -- mode, where DRS_manual opens / closes it; the wing state is DRS_on.
+  drs = 'local e = electrics.values '
+    .. 'if e.drs_toggle ~= nil then e.drs_toggle = 1 - e.drs_toggle '
+    .. 'elseif e.DRS_manual ~= nil then e.DRS = 1 e.DRS_manual = (e.DRS_on or 0) > 0 and 0 or 1 end',
+  -- Push-to-Pass of the CF26: a timed power boost, its key toggles p2p_toggle.
+  push_to_pass = 'electrics.values.p2p_toggle = 1 - (electrics.values.p2p_toggle or 0)',
+  -- Pit limiter of the fr04 (F4 mod and its CF26 F3), same as its key.
+  pit_limiter = 'electrics.values.pitLimiter = 1 - (electrics.values.pitLimiter or 0)',
 }
 
 -- What a second-screen phone may still ask: they read, never drive.

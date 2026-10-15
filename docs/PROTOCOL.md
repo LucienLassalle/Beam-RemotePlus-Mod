@@ -80,6 +80,11 @@ cmd|<name>|1 / |0     hold commands (pressed / released)
 | `esc_mode` | press | next drive mode / ESC mode |
 | `shifter_mode` | press | cycle gearbox modes |
 | `cruise_set`, `cruise_resume`, `cruise_off`, `cruise_up`, `cruise_down` | press | cruise control |
+| `flashers` | press | emergency lights on / off (off also stops the siren) |
+| `siren` | press | siren on / off (on also switches the emergency lights on) |
+| `drs` | press | opens / closes the DRS wing of the vehicle mods that have one (CF26, FR17) |
+| `push_to_pass` | press | starts / stops the Push-to-Pass boost of the CF26 vehicle mod |
+| `pit_limiter` | press | pit limiter on / off on the fr04 vehicle mods (F4, CF26) |
 | `gear_up`, `gear_down` | press | sequential shift |
 | `next_vehicle`, `prev_vehicle` | press | switch vehicle (player's own) |
 | `cam_next`, `cam_prev` | press | camera |
@@ -119,12 +124,17 @@ provide it (show "n/a", do not assume 0).
 | `hasAbs`, `absActive`, `hasEsc`, `escActive`, `hasTcs`, `tcsActive` | bool |
 | `cruiseActive` | bool |
 | `cruiseSpeed` | m/s |
+| `hasLightbar`, `hasSiren` | `true` when the vehicle is fitted with emergency lights / a siren (police, ambulance, fire, pace car), omitted otherwise |
+| `lightbar` | `0` off, `1` emergency lights, `2` lights + siren (fitted vehicles only) |
+| `hasDrs`, `drsOpen` | DRS of the vehicle mods that have one (CF26, FR17): present, wing open |
+| `hasPushToPass`, `pushToPass`, `pushToPassLeft` | Push-to-Pass of the CF26 vehicle mod: present, boost active, seconds of boost left |
+| `hasPitLimiter`, `pitLimiter` | pit limiter of the fr04 vehicle mods (F4, CF26): present, on |
 | `odometer`, `trip` | metres |
 | `gx`, `gy`, `gz` | smoothed acceleration, m/s² |
 | `shiftLight` | bool |
 | `tirePressures` | object `{ "FL": kPa, "FR": kPa, ... }` |
 | `tirePressuresNominal` | same, the pressures set in the vehicle configuration (compare to them, race cars run low pressures) |
-| `driveMode` | object `{ "key": "...", "name": "..." }` |
+| `driveMode` | object `{ "key": "...", "name": "..." }`: drive mode, or the ESC mode (`"esc": true`) on vehicles without drive modes; `"color"`: its color in the game UI (`"98FB00"`), when it has one |
 | `wheelSlip` | largest wheel slip velocity, m/s |
 | `wheelSpin`, `wheelLock` | largest wheelspin (tyre faster than the car) and locked-wheel slip, m/s |
 | `brakeTemps` | `{ "FL": °C, ... }` brake disc surface temperature |

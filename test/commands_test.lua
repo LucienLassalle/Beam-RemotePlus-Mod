@@ -117,3 +117,82 @@ t.describe('commands: special', function()
     t.assertTrue(#names > 20)
   end)
 end)
+
+-- Runs the code a command queued on the vehicle against fake vehicle globals.
+local function runOnVehicle(code, globals)
+  local chunk = assert(loadstring(code))
+  setfenv(chunk, setmetatable(globals, { __index = _G }))
+  chunk()
+end
+
+-- The game's lightbar: 0 off, 1 lights, 2 lights + siren.
+local function fakeElectrics(lightbar)
+  local e = { values = { lightbar = lightbar } }
+  function e.set_lightbar_signal(state) e.values.lightbar = state end
+  return e
+end
+
+t.describe('commands: emergency lights and siren', function()
+  local function after(command, lightbar)
+    local commands, client, vehicle = setup()
+    t.assertTrue(commands.execute(client, command))
+    local electrics = fakeElectrics(lightbar)
+    runOnVehicle(vehicle.commands[1], { electrics = electrics })
+    return electrics.values.lightbar
+  end
+  t.it('flashers switch the lights on and off, siren included', function()
+    t.assertEquals(after('flashers', 0), 1)
+    t.assertEquals(after('flashers', 1), 0)
+    t.assertEquals(after('flashers', 2), 0)
+  end)
+  t.it('the siren needs the lights and keeps them when switched off', function()
+    t.assertEquals(after('siren', 0), 2)
+    t.assertEquals(after('siren', 1), 2)
+    t.assertEquals(after('siren', 2), 1)
+  end)
+end)
+
+t.describe('commands: DRS of vehicle mods', function()
+  local function run(values)
+    local commands, client, vehicle = setup()
+    t.assertTrue(commands.execute(client, 'drs'))
+    runOnVehicle(vehicle.commands[1], { electrics = { values = values } })
+    return values
+  end
+  t.it('CF26: toggles drs_toggle', function()
+    t.assertEquals(run({ drs_toggle = 0 }).drs_toggle, 1)
+    t.assertEquals(run({ drs_toggle = 1 }).drs_toggle, 0)
+  end)
+  t.it('FR17: manual mode, then opens or closes the wing it shows', function()
+    local v = run({ DRS = 0, DRS_manual = 0, DRS_on = 0 })
+    t.assertEquals(v.DRS, 1)
+    t.assertEquals(v.DRS_manual, 1)
+    -- Opened by the automatic mode: the tap closes it.
+    t.assertEquals(run({ DRS = 0, DRS_manual = 0, DRS_on = 1 }).DRS_manual, 0)
+  end)
+  t.it('does nothing on other vehicles', function()
+    local v = run({ drs = 0 })
+    t.assertNil(v.drs_toggle)
+    t.assertNil(v.DRS)
+  end)
+end)
+
+t.describe('commands: Push-to-Pass of vehicle mods', function()
+  t.it('CF26: toggles p2p_toggle like its key', function()
+    local commands, client, vehicle = setup()
+    t.assertTrue(commands.execute(client, 'push_to_pass'))
+    local values = {}
+    runOnVehicle(vehicle.commands[1], { electrics = { values = values } })
+    t.assertEquals(values.p2p_toggle, 1)
+  end)
+end)
+
+t.describe('commands: pit limiter of vehicle mods', function()
+  t.it('fr04: toggles pitLimiter like its key, even before it exists', function()
+    local commands, client, vehicle = setup()
+    t.assertTrue(commands.execute(client, 'pit_limiter'))
+    local values = {}
+    runOnVehicle(vehicle.commands[1], { electrics = { values = values } })
+    t.assertEquals(values.pitLimiter, 1)
+  end)
+end)
