@@ -3,10 +3,19 @@
   "name": "beamRemotePlus.app.name",
   "types": ["ui.apps.categories.vehicle_control"],
   "description": "beamRemotePlus.app.description",
-  "css": { "left": "20px", "top": "300px", "width": "260px", "height": "170px" },
+  "css": {
+    "left": "20px",
+    "top": "300px",
+    "width": "280px",
+    "height": "320px",
+    "min-width": "220px",
+    "min-height": "220px"
+  },
   "author": "LucienLassalle",
   "version": "dev",
+  "preserveAspectRatio": false,
   "directive": "beamRemotePlus",
+  "vue": true,
   "category": "Utility",
   "isAuxiliary": false,
   "interactive": "yes"

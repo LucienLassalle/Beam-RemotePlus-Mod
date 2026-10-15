@@ -6,7 +6,7 @@
 
 local MODULE_DIR = '/lua/ge/extensions/beamRemotePlus/'
 local SIBLINGS = { 'json', 'protocol', 'config', 'i18n', 'logger', 'clients',
-  'commands', 'radar', 'telemetry', 'transport', 'server' }
+  'commands', 'radar', 'telemetry', 'transport', 'nativeRemote', 'server' }
 
 -- require() caches by path independently of extensions.reload(): without
 -- this, reloading the mod would keep running stale sibling modules.
@@ -16,6 +16,7 @@ local configModule = require(MODULE_DIR .. 'config')
 local i18nModule = require(MODULE_DIR .. 'i18n')
 local loggerModule = require(MODULE_DIR .. 'logger')
 local transportModule = require(MODULE_DIR .. 'transport')
+local nativeRemoteModule = require(MODULE_DIR .. 'nativeRemote')
 local serverModule = require(MODULE_DIR .. 'server')
 local radar = require(MODULE_DIR .. 'radar')
 
@@ -34,13 +35,12 @@ local function notify(text, kind)
   })
 end
 
-local function getSecurityCode()
-  local rc = extensions.core_remoteController
-  if not (rc and rc.getQRCode) then return nil end
-  local code = rc.getQRCode() -- also opens the native socket on first call
-  if not code then return nil end
-  return tostring(code)
-end
+-- The game's own remote control: its pairing code is the mod's, and its
+-- pairing is refused while new phones are locked out (see nativeRemote.lua).
+local nativeRemote = nativeRemoteModule.new(function() return extensions.core_remoteController end,
+  function() return extensions.core_input_virtualInput end, debug)
+
+local function getSecurityCode() return nativeRemote.getCode() end
 
 local function getHostLabel()
   local ok, name = pcall(function() return Steam and Steam.playerName end)
@@ -93,6 +93,7 @@ local function createServer()
     notify = notify,
     publishState = function(state) guihooks.trigger('BeamRemotePlusState', state) end,
     getSecurityCode = getSecurityCode,
+    nativeRemote = nativeRemote,
     getHostLabel = getHostLabel,
     getVehicle = getVehicle,
     listVehicles = listVehicles,
@@ -108,12 +109,13 @@ end
 
 local function onExtensionLoaded()
   server = createServer()
-  logger.info('[' .. serverModule.VERSION .. '] loaded, phones ' .. (server.isEnabled() and 'enabled' or 'disabled'))
+  logger.info('[' .. serverModule.VERSION .. '] loaded')
   return true
 end
 
 local function onExtensionUnloaded()
   if server then server.shutdown() end
+  nativeRemote.restore()
   server = nil
 end
 
@@ -147,10 +149,11 @@ local function onSkeleton(vehicleId, skeleton)
   if not ok then logger.warn('skeleton dropped: ' .. tostring(err)) end
 end
 
-local function setEnabled(enabled) if server then server.setEnabled(enabled) end end
-local function toggleEnabled() if server then server.setEnabled(not server.isEnabled()) end end
 local function setDebug(enabled) if server then server.setDebug(enabled) end end
 local function toggleDebug() if server then server.setDebug(not server.state().debug) end end
+local function setLocked(value) if server then server.setLocked(value) end end
+local function toggleLocked() if server then server.setLocked(not server.isLocked()) end end
+local function kick(ip) if server then server.kick(ip) end end
 local function requestState()
   if server then guihooks.trigger('BeamRemotePlusState', server.state()) end
 end
@@ -161,10 +164,11 @@ M.onUpdate = onUpdate
 M.onInputBindingsChanged = onInputBindingsChanged
 M.onTelemetry = onTelemetry
 M.onSkeleton = onSkeleton
-M.setEnabled = setEnabled
-M.toggleEnabled = toggleEnabled
 M.setDebug = setDebug
 M.toggleDebug = toggleDebug
+M.setLocked = setLocked
+M.toggleLocked = toggleLocked
+M.kick = kick
 M.requestState = requestState
 
 return M

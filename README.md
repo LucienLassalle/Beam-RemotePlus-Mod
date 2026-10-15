@@ -26,6 +26,7 @@ longer maintained.
 - Vehicle functions from the phone: horn, lights, indicators, hazards,
   parking brake, ignition, drive mode, gearbox mode, cruise control, gears,
   recovery, vehicle and camera switching.
+- In-game panel: connected players, lock out new phones, kick a phone.
 - Second-screen phones (display only) and local multiplayer (one phone per
   player).
 - English and French.
@@ -48,25 +49,78 @@ longer maintained.
 3. Install the Android app, put the phone on the same network, load a level
    and tap **Automatic connection** in the app.
 
-Phones can be blocked at any time with the **Enable Beam-RemotePlus
-(phones)** action (Options > Controls > General) or the optional
-**Beam-RemotePlus** UI app.
+New phones can be locked out at any time with the **Beam-RemotePlus: lock
+out new phones** action (Options > Controls > General) or the optional
+**Beam-RemotePlus** UI app; phones already connected keep driving.
+
+## In-game panel
+
+The optional **Beam-RemotePlus** UI app (UI apps menu, BeamNG.drive 0.39 or
+newer) shows:
+
+- the pairing code;
+- **Lock out new phones**: phones already connected keep driving, new ones
+  cannot pair (until the game restarts);
+- every connected phone with its player number (*Player 1*, *Player 2*…)
+  or *Second screen*, and a red cross to **kick** it after confirmation.
+  A kicked phone goes back to its pairing screen and may connect again
+  later, unless new phones are locked out.
 
 ## Network
 
 The mod only talks to phones on your local network, never to the internet,
 and connects to no server.
 
-- It listens on UDP port **4446** on all the PC's network interfaces, so a
-  phone finds the PC whether it uses the Wi-Fi, the Ethernet network or the
-  phone's own hotspot. It answers on the phone's UDP port **4447**.
+Two UDP ports are open on the PC, on all its network interfaces, so a
+phone finds the PC whether it uses the Wi-Fi, the Ethernet network or the
+phone's own hotspot:
+
+| Port | Opened by | Receives |
+|---|---|---|
+| UDP **4446** | the mod | discovery, ping, controls, commands |
+| UDP **4444** | the game's own remote control (`core_remoteController`), opened by the mod; pairs no new phone while they are locked out | the app's pairing handshake |
+
+The mod answers each phone on the address the request came from. The ports
+used on the phone are described in the
+[app README](https://github.com/LucienLassalle/Beam-RemotePlus-Mobile#network).
+
+```mermaid
+flowchart LR
+    phone["Phone<br/>(Beam-RemotePlus app)"]
+    subgraph pc["PC: BeamNG.drive"]
+        mod["Beam-RemotePlus mod<br/>UDP 4446"]
+        native["Game remote control<br/>UDP 4444"]
+        mod -- "reads the pairing code" --> native
+    end
+    phone -- "discovery, ping,<br/>controls, commands" --> mod
+    mod -- "hello, pong,<br/>telemetry, events" --> phone
+    phone -- "pairing handshake" --> native
+```
+
 - A phone drives only after sending the 5-digit pairing code shown in the
   game. **Automatic connection** gets that code from the mod, so any device
   on the same local network can connect: use a network you trust.
-- Phones are allowed by default and can be blocked at any time (see
-  [Installation](#installation)); the mod then closes port 4446.
+- New phones are allowed by default and can be locked out at any time (see
+  [In-game panel](#in-game-panel)): the mod then ignores them, port 4446
+  stays open for the phones already connected. Port 4444 accepts the same
+  pairing code, so the mod also stops it from pairing new phones (even if
+  the game's own "use a phone or tablet" option was ticked) until unlocked.
 - Windows may ask to allow BeamNG.drive through the firewall on first
-  launch. Allow ports 4446 and 4447 if the phone cannot find the PC.
+  launch. If the phone cannot find the PC, allow **incoming UDP 4444 and
+  4446**, for example in an administrator PowerShell:
+
+  ```powershell
+  New-NetFirewallRule -DisplayName "Beam-RemotePlus" -Direction Inbound -Protocol UDP -LocalPort 4444,4446 -Action Allow
+  ```
+
+  If **Cancel** was clicked on the Windows prompt, Windows created *block*
+  rules for BeamNG.drive, and a block rule always wins over an allow rule.
+  List them, then remove them (Windows asks again on the next launch):
+
+  ```powershell
+  Get-NetFirewallRule -Direction Inbound -Action Block | Where-Object DisplayName -Match "BeamNG"
+  Get-NetFirewallRule -Direction Inbound -Action Block | Where-Object DisplayName -Match "BeamNG" | Remove-NetFirewallRule
+  ```
 
 ## Optional: tyre temperatures
 

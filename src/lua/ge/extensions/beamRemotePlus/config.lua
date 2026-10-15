@@ -9,11 +9,11 @@ local M = {}
 
 M.FILE_PATH = '/settings/beamRemotePlus.json'
 
--- enabled: phones are allowed to connect. ON by default: installing the mod
--- is the user's opt-in, a second switch to find would only be friction.
 -- debug: verbose logs + positive command acks sent to the app.
+-- (Phones are always allowed once the mod is installed: the only switch is
+-- the session lock on new phones, never saved. An `enabled` key written by
+-- older versions is ignored.)
 M.DEFAULTS = {
-  enabled = true,
   debug = false,
   showPairingToast = true,
 }
