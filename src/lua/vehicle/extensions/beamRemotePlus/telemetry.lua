@@ -334,7 +334,8 @@ end
 
 -- Current drive mode ("Comfort", "Sport"...), or for vehicles without drive
 -- modes the ESC mode ("Regular", "Off"...): the esc_mode command switches
--- whichever the vehicle has, and the phone shows it on its button.
+-- whichever the vehicle has, and the phone shows it on its button, in the
+-- color the game gives that mode.
 -- getController: the vehicle's controller.getController (injected for tests).
 function M.driveMode(getController)
   if not getController then return nil end
@@ -343,12 +344,32 @@ function M.driveMode(getController)
     local key = driveModes.getCurrentDriveModeKey and driveModes.getCurrentDriveModeKey()
     local data = key and driveModes.getDriveModeData and driveModes.getDriveModeData(key)
     if not data then return nil end
-    return { key = tostring(key), name = data.name and tostring(data.name) or tostring(key) }
+    return { key = tostring(key), name = data.name and tostring(data.name) or tostring(key), color = M.driveModeColor(data) }
   end
   local esc = getController('esc')
   local config = esc and esc.getCurrentConfigData and esc.getCurrentConfigData()
   if type(config) ~= 'table' or not config.name then return nil end
-  return { key = 'esc:' .. tostring(config.name), name = tostring(config.name), esc = true }
+  return { key = 'esc:' .. tostring(config.name), name = tostring(config.name), esc = true, color = M.hexColor(config.activeColor) }
+end
+
+-- "98FB00" style colors as the game writes them (no #), else nil.
+function M.hexColor(v)
+  if type(v) ~= 'string' then return nil end
+  local hex = v:gsub('^#', '')
+  if not hex:match('^%x%x%x%x%x%x$') then return nil end
+  return hex:upper()
+end
+
+-- Color of the drive mode's button in the game's own UI (its
+-- simpleControlButton setting), the same as the ESC mode color.
+function M.driveModeColor(data)
+  for _, setting in pairs(type(data.settings) == 'table' and data.settings or {}) do
+    if type(setting) == 'table' and setting.type == 'simpleControlButton' then
+      local color = M.hexColor(setting.color)
+      if color then return color end
+    end
+  end
+  return nil
 end
 
 function M.onExtensionLoaded()

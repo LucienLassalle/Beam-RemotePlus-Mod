@@ -94,23 +94,35 @@ t.describe('vehicle telemetry driveMode()', function()
   local function controllers(list) return function(name) return list[name] end end
   local driveModes = {
     getCurrentDriveModeKey = function() return 'sport' end,
-    getDriveModeData = function() return { name = 'Sport' } end,
+    getDriveModeData = function()
+      return { name = 'Sport', settings = { { type = 'exhaust' }, { type = 'simpleControlButton', color = 'ff4400' } } }
+    end,
   }
-  local esc = { getCurrentConfigData = function() return { name = 'Regular' } end }
+  local esc = { getCurrentConfigData = function() return { name = 'Regular', activeColor = '98fb00' } end }
 
   t.it('reports the drive mode first', function()
     local mode = vehicleTelemetry.driveMode(controllers({ driveModes = driveModes, esc = esc }))
     t.assertEquals(mode.name, 'Sport')
+    t.assertEquals(mode.color, 'FF4400')
     t.assertNil(mode.esc)
   end)
   t.it('falls back to the ESC mode on vehicles without drive modes', function()
     local mode = vehicleTelemetry.driveMode(controllers({ esc = esc }))
     t.assertEquals(mode.name, 'Regular')
     t.assertEquals(mode.key, 'esc:Regular')
+    t.assertEquals(mode.color, '98FB00')
     t.assertTrue(mode.esc)
   end)
   t.it('reports nothing on vehicles with neither', function()
     t.assertNil(vehicleTelemetry.driveMode(controllers({})))
     t.assertNil(vehicleTelemetry.driveMode(nil))
+  end)
+end)
+
+t.describe('vehicle telemetry hexColor()', function()
+  t.it('keeps 6-digit hex colors only', function()
+    t.assertEquals(vehicleTelemetry.hexColor('#98fb00'), '98FB00')
+    t.assertNil(vehicleTelemetry.hexColor('green'))
+    t.assertNil(vehicleTelemetry.hexColor(nil))
   end)
 end)
