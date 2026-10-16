@@ -6,6 +6,7 @@ local protocol = require('/lua/ge/extensions/beamRemotePlus/protocol')
 local clientsModule = require('/lua/ge/extensions/beamRemotePlus/clients')
 local commandsModule = require('/lua/ge/extensions/beamRemotePlus/commands')
 local telemetryModule = require('/lua/ge/extensions/beamRemotePlus/telemetry')
+local optionalModsModule = require('/lua/ge/extensions/beamRemotePlus/optionalMods')
 
 local M = {}
 
@@ -30,6 +31,8 @@ deps:
   switchVehicle(player, dir)  -> ok, err
   cycleCamera(player, offset) -> ok, err
   onDeviceCreated()           optional, forces an input device rescan
+  getMods()                   optional, core_modmanager.getMods()
+  fileExists(path)            optional, file in the game's virtual file system
   nativeRemote                optional nativeRemote.new(...) instance: the
                               game's own remote control (UDP 4444)
 ]]
@@ -70,6 +73,12 @@ function M.new(deps)
     send = send,
   })
 
+  local optionalMods = optionalModsModule.new({
+    getMods = deps.getMods or function() return nil end,
+    fileExists = deps.fileExists or function() return false end,
+  })
+  optionalMods.refresh()
+
   local function releaseHold(client, name) commands.release(client, name) end
 
   self.clients = clients
@@ -90,6 +99,7 @@ function M.new(deps)
       code = listening and deps.getSecurityCode() or nil,
       port = protocol.HOST_PORT,
       phones = phones,
+      optionalMods = optionalMods.list(),
     }
   end
 
@@ -223,6 +233,7 @@ function M.new(deps)
     if client.version < 2 then return end
     send(client, protocol.buildSessionMessage({
       modVersion = M.VERSION, player = client.player, commands = commands.names(),
+      optionalMods = optionalMods.states(),
     }))
   end
 
@@ -274,6 +285,20 @@ function M.new(deps)
       sendSession(client)
     end
     publish()
+  end
+
+  -- A mod was enabled, disabled, installed or removed: the panel and every
+  -- phone are told when an optional mod changed.
+  function self.refreshOptionalMods()
+    if not optionalMods.refresh() then return false end
+    local enabled = {}
+    for _, mod in ipairs(optionalMods.list()) do
+      if mod.state == optionalModsModule.ENABLED then enabled[#enabled + 1] = mod.id end
+    end
+    log.info('optional mods enabled: ' .. (#enabled > 0 and table.concat(enabled, ', ') or 'none'))
+    clients.each(function(_, client) sendSession(client) end)
+    publish()
+    return true
   end
 
   function self.onTelemetry(vehicleId, t)

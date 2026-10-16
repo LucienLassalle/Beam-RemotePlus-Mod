@@ -18,6 +18,7 @@ local function setup(opts)
     states = {},
     vehicle = fakes.vehicle(11),
     rescans = 0,
+    mods = opts.mods or {}, -- core_modmanager.getMods()
   }
   env.transport.failOpen = opts.portBusy
   env.native = { isOpen = false, locked = false, lockCalls = 0 }
@@ -48,6 +49,8 @@ local function setup(opts)
     cycleCamera = function() return true end,
     onDeviceCreated = function() env.rescans = env.rescans + 1 end,
     nativeRemote = env.native,
+    getMods = function() return env.mods end,
+    fileExists = function() return false end,
   })
   return env
 end
@@ -361,5 +364,45 @@ t.describe('server: second screen', function()
     env.clock.advance(protocol.CLIENT_TIMEOUT_MS + 1)
     env.server.update()
     t.assertEquals(env.server.clients.count(), 0)
+  end)
+end)
+
+t.describe('server: optional mods', function()
+  local function sessions(env)
+    local list = {}
+    for _, s in ipairs(env.transport.sent) do
+      if s.payload:find('"type":"session"', 1, true) then list[#list + 1] = s.payload end
+    end
+    return list
+  end
+  local function assigned(mods)
+    local env = setup({ mods = mods })
+    connect(env)
+    local client = env.server.clients.get('10.0.0.2')
+    env.server.onInputBindingsChanged({ ['vinput' .. client.deviceInst] = 0 })
+    env.server.update()
+    return env
+  end
+  t.it('knows the installed mods from the start, for the panel and the phones', function()
+    local env = assigned({ fr17 = { active = true, modData = { tagid = 'MCSAUJ2PR' } } })
+    local mods = env.server.state().optionalMods
+    t.assertEquals(#mods, 4)
+    t.assertEquals(mods[4].id, 'fr17')
+    t.assertEquals(mods[4].state, 'enabled')
+    t.assertEquals(mods[1].state, 'missing')
+    t.assertContains(sessions(env)[1], '"fr17":"enabled"')
+    t.assertContains(sessions(env)[1], '"cf26":"missing"')
+  end)
+  t.it('tells the panel and the phones when a mod is enabled or disabled', function()
+    local env = assigned({ cf26 = { active = false, modData = { tagid = 'MSH2WZ9QV' } } })
+    local before, published = #sessions(env), #env.states
+    t.assertFalse(env.server.refreshOptionalMods())
+    t.assertEquals(#sessions(env), before)
+    env.mods.cf26.active = true
+    t.assertTrue(env.server.refreshOptionalMods())
+    t.assertEquals(#sessions(env), before + 1)
+    t.assertContains(sessions(env)[#sessions(env)], '"cf26":"enabled"')
+    t.assertTrue(#env.states > published)
+    t.assertEquals(env.states[#env.states].optionalMods[3].state, 'enabled')
   end)
 end)
