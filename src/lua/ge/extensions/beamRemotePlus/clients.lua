@@ -57,6 +57,7 @@ function M.new(input, clock)
     if ping.role == protocol.ROLE_DISPLAY then
       client = {
         ip = ip, deviceName = ping.deviceName or ip, version = protocol.negotiateVersion(ping.version),
+        appVersion = ping.appVersion,
         display = true, state = { 0.5, 0, 0 }, holds = {}, player = 0, debug = false, lastSeen = clock(),
       }
       clients[ip] = client
@@ -73,6 +74,7 @@ function M.new(input, clock)
       deviceInst = deviceInst,
       deviceName = ping.deviceName or ip,
       version = protocol.negotiateVersion(ping.version),
+      appVersion = ping.appVersion, -- nil for older apps
       state = { 0.5, 0, 0 },
       holds = {},       -- active "hold" commands (horn...) to release on disconnect
       player = nil,     -- assigned by BeamNG (see assignPlayers)

@@ -96,13 +96,16 @@ function M.isCmdMessage(data)
   return startsWith(data, M.CMD_PREFIX)
 end
 
-function M.buildPingMessage(code, version, deviceName, role)
+function M.buildPingMessage(code, version, deviceName, role, appVersion)
   local msg = M.PING_PREFIX .. tostring(code)
   if version then
     msg = msg .. '|' .. tostring(version)
     if deviceName then
       msg = msg .. '|' .. tostring(deviceName):gsub('|', ' ')
-      if role then msg = msg .. '|' .. role end
+      if role then
+        msg = msg .. '|' .. role
+        if appVersion then msg = msg .. '|' .. tostring(appVersion):gsub('|', ' ') end
+      end
     end
   end
   return msg
@@ -111,9 +114,10 @@ end
 M.ROLE_CONTROLLER = 'controller'
 M.ROLE_DISPLAY = 'display' -- second screen: telemetry only, no inputs
 
--- Returns { code, version, deviceName, role, prefix } or nil. Apps speaking
--- protocol 1 only send the code, so a missing version means 1.
--- ping: beamremoteplus|ping|<code>[|<version>[|<device>[|<role>]]]
+-- Returns { code, version, deviceName, role, appVersion, prefix } or nil.
+-- Apps speaking protocol 1 only send the code, so a missing version means 1;
+-- older apps do not send their own version (appVersion nil).
+-- ping: beamremoteplus|ping|<code>[|<version>[|<device>[|<role>[|<app version>]]]]
 function M.parsePing(data)
   local prefix = pingPrefix(data)
   if not prefix then return nil end
@@ -124,7 +128,9 @@ function M.parsePing(data)
   local deviceName = fields[3]
   if deviceName == '' then deviceName = nil end
   local role = fields[4] == M.ROLE_DISPLAY and M.ROLE_DISPLAY or M.ROLE_CONTROLLER
-  return { code = code, version = version, deviceName = deviceName, role = role, prefix = prefix }
+  local appVersion = fields[5]
+  if appVersion == '' then appVersion = nil end
+  return { code = code, version = version, deviceName = deviceName, role = role, appVersion = appVersion, prefix = prefix }
 end
 
 function M.pingMatchesCode(data, code)
