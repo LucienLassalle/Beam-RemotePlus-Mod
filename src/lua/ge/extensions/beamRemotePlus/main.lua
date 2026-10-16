@@ -6,7 +6,7 @@
 
 local MODULE_DIR = '/lua/ge/extensions/beamRemotePlus/'
 local SIBLINGS = { 'json', 'protocol', 'config', 'i18n', 'logger', 'clients',
-  'commands', 'radar', 'telemetry', 'transport', 'nativeRemote', 'optionalMods', 'server' }
+  'commands', 'radar', 'telemetry', 'transport', 'nativeRemote', 'version', 'optionalMods', 'server' }
 
 -- require() caches by path independently of extensions.reload(): without
 -- this, reloading the mod would keep running stale sibling modules.
