@@ -188,12 +188,20 @@ debug mode.
 Errors: `unknown_command`, `bad_argument`, `no_vehicle`, `display_only`,
 `unavailable:<feature>`.
 
-**`session`**: sent when the player is assigned and when debug mode is
-switched on.
+**`session`**: sent when the player is assigned, when debug mode is
+switched on and when an optional mod is enabled, disabled, installed or
+removed.
 
 ```json
-{"type":"session","modVersion":"0.0.3","player":0,"commands":["cam_next", "..."]}
+{"type":"session","modVersion":"0.0.3","player":0,"commands":["cam_next", "..."],
+ "optionalMods":{"tyreThermals":"enabled","f4":"enabled","cf26":"disabled","fr17":"missing"}}
 ```
+
+`optionalMods` (not sent by older mods): state of every optional mod the
+mod works with, `enabled`, `disabled` (installed but turned off in the mod
+manager) or `missing`. Ids: `tyreThermals` (Tyre Thermals and Wear by Luuk,
+or its continuation Tyre Wear and Thermals Redux), `f4` (Carbonworks F4),
+`cf26`, `fr17`. Unknown ids must be ignored.
 
 **`kicked`**: the player removed this phone from the in-game panel. The
 session is already closed on the mod side: the app must stop pinging (it

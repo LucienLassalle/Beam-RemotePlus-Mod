@@ -6,7 +6,7 @@
 
 local MODULE_DIR = '/lua/ge/extensions/beamRemotePlus/'
 local SIBLINGS = { 'json', 'protocol', 'config', 'i18n', 'logger', 'clients',
-  'commands', 'radar', 'telemetry', 'transport', 'nativeRemote', 'server' }
+  'commands', 'radar', 'telemetry', 'transport', 'nativeRemote', 'optionalMods', 'server' }
 
 -- require() caches by path independently of extensions.reload(): without
 -- this, reloading the mod would keep running stale sibling modules.
@@ -102,6 +102,8 @@ local function createServer()
     onDeviceCreated = function()
       if core_input_bindings and core_input_bindings.onDeviceChanged then core_input_bindings.onDeviceChanged() end
     end,
+    getMods = function() return core_modmanager and core_modmanager.getMods and core_modmanager.getMods() or nil end,
+    fileExists = function(path) return FS ~= nil and FS:fileExists(path) end,
   })
 end
 
@@ -133,6 +135,14 @@ local function onInputBindingsChanged(players)
   if not ok then logger.warn('onInputBindingsChanged ignored: ' .. tostring(err)) end
 end
 
+-- The mod manager finished loading, or a mod was enabled, disabled,
+-- installed or removed: the optional mods may have changed.
+local function onModsChanged()
+  if not server then return end
+  local ok, err = pcall(server.refreshOptionalMods)
+  if not ok then logger.warn('optional mods check failed: ' .. tostring(err)) end
+end
+
 -- Public API ------------------------------------------------------------------
 
 -- Called from the vehicle VM (lua/vehicle/extensions/beamRemotePlus/telemetry.lua).
@@ -162,6 +172,10 @@ M.onExtensionLoaded = onExtensionLoaded
 M.onExtensionUnloaded = onExtensionUnloaded
 M.onUpdate = onUpdate
 M.onInputBindingsChanged = onInputBindingsChanged
+M.onModManagerReady = onModsChanged
+M.onModActivated = onModsChanged
+M.onModDeactivated = onModsChanged
+M.onModManagerStateChanged = onModsChanged
 M.onTelemetry = onTelemetry
 M.onSkeleton = onSkeleton
 M.setDebug = setDebug

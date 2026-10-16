@@ -74,3 +74,15 @@ t.describe('assets: game integration', function()
     end
   end)
 end)
+
+t.describe('assets: UI app', function()
+  t.it('has nothing outside its template, script and style blocks', function()
+    -- Vue ignores anything else: code there is silently never run.
+    local rest = read('ui/modules/apps/BeamRemotePlus/app.vue')
+      :gsub('<!%-%-.-%-%->', '')
+      :gsub('<template>.*</template>', '')
+      :gsub('<script setup>.-</script>', '')
+      :gsub('<style[^>]*>.-</style>', '')
+    t.assertEquals((rest:gsub('%s', '')), '')
+  end)
+end)
