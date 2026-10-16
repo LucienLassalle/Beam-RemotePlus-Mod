@@ -66,6 +66,9 @@ newer) shows:
   or *Second screen*, and a red cross to **kick** it after confirmation.
   A kicked phone goes back to its pairing screen and may connect again
   later, unless new phones are locked out.
+- the **Optional mods** tab, next to the phones: the optional mods below,
+  what each one adds, and whether it is **enabled**, **installed but
+  disabled** or **not installed**, as the game's mod manager reports it.
 
 ## Network
 
@@ -125,9 +128,14 @@ flowchart LR
 
 ## Optional: tyre temperatures
 
-With the **Tyre Thermals and Wear** mod (by Luuk, on the BeamNG.drive
-repository) enabled, the phone also shows the temperature and wear of each
-tyre. Nothing changes for that mod, and nothing is sent without it.
+With a tyre thermals mod enabled, the phone also shows the temperature and
+wear of each tyre. Nothing changes for that mod, and nothing is sent
+without it. Both versions on the BeamNG.drive repository work:
+
+- **Tyre Wear and Thermals Redux** by Zesty_Maple98, maintained
+  continuation of the original (recommended);
+- **Luuks Tyre Thermals and Wear Mod** by lucky4luuk, the original, marked
+  unsupported since its author stepped back (last update January 2024).
 
 ## Optional: vehicle mods
 
@@ -137,8 +145,8 @@ vehicle nothing changes, and none of these mods is needed:
 
 | Vehicle mod (BeamNG.drive repository) | Controls on the phone |
 |---|---|
-| **CF26** (F3 configurations of the fr04) | DRS, Push-to-Pass, pit limiter |
-| **F4** by LucasBE (fr04) | pit limiter |
+| **CF26** (add-on of the F4, its F3 configurations) | DRS, Push-to-Pass, pit limiter |
+| **Carbonworks F4** by LucasBE (fr04) | pit limiter |
 | **FR17** | DRS (switches it to its manual mode) |
 
 The mod uses the same vehicle values as these mods' own keys and changes
