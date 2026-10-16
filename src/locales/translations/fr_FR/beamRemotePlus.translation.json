@@ -38,6 +38,8 @@
   "beamRemotePlus.mods.f4Features": "Limiteur de stand",
   "beamRemotePlus.mods.fr17": "FR17",
   "beamRemotePlus.mods.fr17Features": "DRS",
+  "beamRemotePlus.app.updateApp": "Appli pas à jour (v{version}) : mettez-la à jour sur ce téléphone",
+  "beamRemotePlus.app.updateMod": "Appli plus récente (v{version}) : mettez à jour le mod Beam-RemotePlus",
   "ui.inputActions.beamRemotePlus.toggle.title": "Beam-RemotePlus : bloquer les nouveaux téléphones",
   "ui.inputActions.beamRemotePlus.toggle.description": "Bloque ou autorise les nouveaux téléphones ; ceux déjà connectés continuent de jouer",
   "ui.inputActions.beamRemotePlus.toggleDebug.title": "Mode debug Beam-RemotePlus",

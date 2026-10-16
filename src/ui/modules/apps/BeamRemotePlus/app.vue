@@ -73,6 +73,10 @@
             <span class="brp-phone-role">
               {{ phone.display ? $t("beamRemotePlus.app.secondScreen") + " · " : "" }}{{ $t("beamRemotePlus.app.player") }} {{ playerNumber(phone) }}
             </span>
+            <span v-if="phone.update" class="brp-phone-update">
+              <BngIcon type="warning" color="var(--bng-orange-400)" />
+              {{ updateText(phone) }}
+            </span>
           </div>
           <BngButton
             class="brp-kick"
@@ -143,6 +147,11 @@ const setDebug = value => callMod("setDebug", !!value)
 
 // BeamNG players are 0-based; a phone is unassigned for a moment after pairing.
 const playerNumber = phone => (phone.player === undefined || phone.player === null ? "?" : phone.player + 1)
+
+// The mod compares its version with the app of each phone (server.lua):
+// update is "app" or "mod", whichever is older.
+const updateText = phone =>
+  $translate.instant(phone.update === "mod" ? "beamRemotePlus.app.updateMod" : "beamRemotePlus.app.updateApp", { version: phone.appVersion })
 
 async function confirmKick(phone) {
   const kick = await openConfirmation(
@@ -332,6 +341,14 @@ onMounted(() => {
 }
 
 .brp-phone-role {
+  color: var(--bng-orange-400);
+  font-size: 0.75rem;
+}
+
+.brp-phone-update {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
   color: var(--bng-orange-400);
   font-size: 0.75rem;
 }
