@@ -38,6 +38,8 @@
   "beamRemotePlus.mods.f4Features": "Pit limiter",
   "beamRemotePlus.mods.fr17": "FR17",
   "beamRemotePlus.mods.fr17Features": "DRS",
+  "beamRemotePlus.app.updateApp": "App out of date (v{version}): update it on this phone",
+  "beamRemotePlus.app.updateMod": "Newer app (v{version}): update the Beam-RemotePlus mod",
   "ui.inputActions.beamRemotePlus.toggle.title": "Beam-RemotePlus: lock out new phones",
   "ui.inputActions.beamRemotePlus.toggle.description": "Locks out or allows new phones; phones already connected keep driving",
   "ui.inputActions.beamRemotePlus.toggleDebug.title": "Beam-RemotePlus debug mode",

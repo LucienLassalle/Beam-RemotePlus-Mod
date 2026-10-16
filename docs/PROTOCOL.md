@@ -30,7 +30,7 @@ PC    → phone:4447       beamremoteplus|hello|<code>|<label>
 ## 2. Pairing (ping / pong)
 
 ```
-phone → PC:4446   beamremoteplus|ping|<code>|<version>|<device name>[|display]
+phone → PC:4446   beamremoteplus|ping|<code>|<version>|<device name>[|<role>[|<app version>]]
 PC    → phone     beamremoteplus|pong|<code>|<negotiated version>
 ```
 
@@ -38,10 +38,15 @@ PC    → phone     beamremoteplus|pong|<code>|<negotiated version>
   only send `beamremoteplus|ping|<code>`.
 - The negotiated version is `min(app, mod)`. With version 1 the mod sends
   the legacy binary telemetry (section 5).
+- `<role>` (optional): `controller` (default) or `display`.
 - `display` (optional): **second screen**. The phone gets the telemetry of
   player 1 but no virtual input device, its control packets are ignored and
   every command except `debug` and `skeleton` is refused with `display_only`. A phone that
   changes role starts a new session.
+- `<app version>` (optional, after the role): release version of the app
+  (`0.0.5`, `0.0.5-0.39`, the version given to the build).
+  The mod compares it with its own version to tell which side needs an
+  update. Older apps do not send it.
 - The phone pings every 500 ms until it receives the pong, then every 2 s:
   if the mod restarted and forgot the phone, the ping re-creates the session. Once paired, any
   packet (the 60 Hz control packets) keeps the session alive; a phone silent

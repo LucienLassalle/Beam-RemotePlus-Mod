@@ -406,3 +406,25 @@ t.describe('server: optional mods', function()
     t.assertEquals(env.states[#env.states].optionalMods[3].state, 'enabled')
   end)
 end)
+
+t.describe('server: app and mod versions', function()
+  local function phoneWithApp(appVersion, modVersion)
+    local saved = serverModule.VERSION
+    serverModule.VERSION = modVersion
+    local env = setup()
+    env.transport.push(protocol.buildPingMessage(CODE, 2, 'Pixel', 'controller', appVersion), '10.0.0.2')
+    env.server.update()
+    local phone = env.server.state().phones[1]
+    serverModule.VERSION = saved
+    return phone
+  end
+  t.it('tells the in-game panel which side is older', function()
+    t.assertEquals(phoneWithApp('0.0.4', '0.0.5-0.39').update, 'app')
+    t.assertEquals(phoneWithApp('0.0.6', '0.0.5-0.39').update, 'mod')
+    t.assertEquals(phoneWithApp('0.0.6', '0.0.5-0.39').appVersion, '0.0.6')
+  end)
+  t.it('says nothing when they match or for apps that do not send their version', function()
+    t.assertNil(phoneWithApp('0.0.5', '0.0.5-0.39').update)
+    t.assertNil(phoneWithApp(nil, '0.0.5-0.39').update)
+  end)
+end)

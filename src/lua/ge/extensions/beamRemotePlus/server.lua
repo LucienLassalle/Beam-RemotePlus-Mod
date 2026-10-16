@@ -7,6 +7,7 @@ local clientsModule = require('/lua/ge/extensions/beamRemotePlus/clients')
 local commandsModule = require('/lua/ge/extensions/beamRemotePlus/commands')
 local telemetryModule = require('/lua/ge/extensions/beamRemotePlus/telemetry')
 local optionalModsModule = require('/lua/ge/extensions/beamRemotePlus/optionalMods')
+local versionModule = require('/lua/ge/extensions/beamRemotePlus/version')
 
 local M = {}
 
@@ -89,7 +90,11 @@ function M.new(deps)
   function self.state()
     local phones = {}
     clients.each(function(ip, client)
-      phones[#phones + 1] = { ip = ip, device = client.deviceName, player = client.player, protocol = client.version, display = client.display }
+      phones[#phones + 1] = {
+        ip = ip, device = client.deviceName, player = client.player, protocol = client.version, display = client.display,
+        -- update: 'app' or 'mod' when that side is older than the other one.
+        appVersion = client.appVersion, update = versionModule.outdated(M.VERSION, client.appVersion),
+      }
     end)
     return {
       version = M.VERSION,
