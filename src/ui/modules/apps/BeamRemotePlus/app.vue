@@ -71,7 +71,7 @@
           <div class="brp-phone-text">
             <span class="brp-phone-name">{{ phone.device }}</span>
             <span class="brp-phone-role">
-              {{ phone.display ? $t("beamRemotePlus.app.secondScreen") + " · " : "" }}{{ $t("beamRemotePlus.app.player") }} {{ playerNumber(phone) }}
+              {{ phone.display ? $t("beamRemotePlus.app.secondScreen") + " · " : "" }}{{ $t("beamRemotePlus.app.player") }} {{ playerNumber(phone) }}{{ phone.appVersion ? " · v" + phone.appVersion : "" }}
             </span>
             <span v-if="phone.update" class="brp-phone-update">
               <BngIcon type="warning" color="var(--bng-orange-400)" />
