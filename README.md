@@ -66,6 +66,10 @@ newer) shows:
   or *Second screen*, and a red cross to **kick** it after confirmation.
   A kicked phone goes back to its pairing screen and may connect again
   later, unless new phones are locked out.
+- under a phone, a warning when its app and the mod are not the same
+  release: **App out of date** (update the app on that phone) or **Newer
+  app** (update the mod). Older apps do not send their version and
+  never get this warning.
 - the **Optional mods** tab, next to the phones: the optional mods below,
   what each one adds, and whether it is **enabled**, **installed but
   disabled** or **not installed**, as the game's mod manager reports it.
