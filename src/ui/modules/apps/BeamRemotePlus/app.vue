@@ -1,6 +1,7 @@
 <!--
   In-game panel of the Beam-RemotePlus mod: pairing code, lock on new
-  phones and the connected phones with their player number. Add it from the
+  phones, the connected phones with their player number and, in a second
+  tab, the optional mods it works with. Add it from the
   UI apps menu (it is optional: phones can connect as soon as the mod is
   installed).
 
@@ -35,28 +36,53 @@
       </span>
     </BngSwitch>
 
-    <div class="brp-section">
-      <span>{{ $t("beamRemotePlus.app.phones") }}</span>
-      <span class="brp-count">{{ phones.length }}</span>
+    <div class="brp-tabs">
+      <button type="button" class="brp-tab" :class="{ 'brp-tab-on': !showMods }" @click="showMods = false">
+        <span>{{ $t("beamRemotePlus.app.phones") }}</span>
+        <span class="brp-count">{{ phones.length }}</span>
+      </button>
+      <button type="button" class="brp-tab" :class="{ 'brp-tab-on': showMods }" @click="showMods = true">
+        <span>{{ $t("beamRemotePlus.app.optionalMods") }}</span>
+        <span class="brp-count">{{ enabledCount }}/{{ optionalMods.length }}</span>
+      </button>
     </div>
-    <div class="brp-list">
-      <div v-if="!phones.length" class="brp-empty">{{ $t("beamRemotePlus.app.noPhone") }}</div>
-      <div v-for="phone in phones" :key="phone.ip" class="brp-phone">
-        <BngIcon class="brp-phone-icon" :type="phone.display ? 'screen' : 'smartphone1'" />
-        <div class="brp-phone-text">
-          <span class="brp-phone-name">{{ phone.device }}</span>
-          <span class="brp-phone-role">
-            {{ phone.display ? $t("beamRemotePlus.app.secondScreen") + " · " : "" }}{{ $t("beamRemotePlus.app.player") }} {{ playerNumber(phone) }}
+
+    <template v-if="showMods">
+      <div class="brp-list">
+        <div class="brp-hint">{{ $t("beamRemotePlus.app.optionalModsHint") }}</div>
+        <div v-for="mod in optionalMods" :key="mod.id" class="brp-mod" :class="'brp-mod-' + mod.state">
+          <div class="brp-phone-text">
+            <span class="brp-phone-name">{{ $t(modText(mod).name) }}</span>
+            <span v-if="modText(mod).features" class="brp-mod-features">{{ $t(modText(mod).features) }}</span>
+          </div>
+          <span class="brp-mod-status">
+            <BngIcon v-if="mod.state === 'enabled'" type="checkmark" color="var(--bng-add-green-400)" />
+            {{ $t(STATE_TEXTS[mod.state] || STATE_TEXTS.missing) }}
           </span>
         </div>
-        <BngButton
-          class="brp-kick"
-          :accent="ACCENTS.ghost"
-          icon="xmark"
-          :title="$t('beamRemotePlus.app.kick')"
-          @click="confirmKick(phone)" />
       </div>
-    </div>
+    </template>
+
+    <template v-else>
+      <div class="brp-list">
+        <div v-if="!phones.length" class="brp-empty">{{ $t("beamRemotePlus.app.noPhone") }}</div>
+        <div v-for="phone in phones" :key="phone.ip" class="brp-phone">
+          <BngIcon class="brp-phone-icon" :type="phone.display ? 'screen' : 'smartphone1'" />
+          <div class="brp-phone-text">
+            <span class="brp-phone-name">{{ phone.device }}</span>
+            <span class="brp-phone-role">
+              {{ phone.display ? $t("beamRemotePlus.app.secondScreen") + " · " : "" }}{{ $t("beamRemotePlus.app.player") }} {{ playerNumber(phone) }}
+            </span>
+          </div>
+          <BngButton
+            class="brp-kick"
+            :accent="ACCENTS.ghost"
+            icon="xmark"
+            :title="$t('beamRemotePlus.app.kick')"
+            @click="confirmKick(phone)" />
+        </div>
+      </div>
+    </template>
 
     <div class="brp-footer">
       <BngSwitch :model-value="state.debug" @update:model-value="setDebug">
@@ -80,6 +106,26 @@ const events = useEvents()
 
 const state = ref({ listening: false, locked: false, debug: false, phones: [], version: "" })
 const phones = computed(() => state.value.phones || [])
+
+// Optional mods the mod works with and whether each one is enabled,
+// installed but disabled, or missing (optionalMods.lua), in their own tab
+// next to the phones.
+const showMods = ref(false)
+const optionalMods = computed(() => state.value.optionalMods || [])
+const enabledCount = computed(() => optionalMods.value.filter(mod => mod.state === "enabled").length)
+const STATE_TEXTS = {
+  enabled: "beamRemotePlus.app.modEnabled",
+  disabled: "beamRemotePlus.app.modDisabled",
+  missing: "beamRemotePlus.app.modMissing",
+}
+const MOD_TEXTS = {
+  tyreThermals: { name: "beamRemotePlus.mods.tyreThermals", features: "beamRemotePlus.mods.tyreThermalsFeatures" },
+  cf26: { name: "beamRemotePlus.mods.cf26", features: "beamRemotePlus.mods.cf26Features" },
+  f4: { name: "beamRemotePlus.mods.f4", features: "beamRemotePlus.mods.f4Features" },
+  fr17: { name: "beamRemotePlus.mods.fr17", features: "beamRemotePlus.mods.fr17Features" },
+}
+// A newer Lua side may know mods this panel does not: shown by their id.
+const modText = mod => MOD_TEXTS[mod.id] || { name: mod.id, features: "" }
 
 // The pairing code lets anyone on the network drive: hidden until clicked
 // (streams, screenshots), hidden again on a second click.
@@ -199,15 +245,38 @@ onMounted(() => {
   gap: 0.375rem;
 }
 
-.brp-section {
+.brp-tabs {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  gap: 0.25rem;
   margin-top: 0.25rem;
+  border-bottom: 1px solid rgba(var(--bng-off-white-rgb), 0.15);
+}
+
+.brp-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
   color: var(--bng-cool-gray-300);
+  font-family: inherit;
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    color: var(--bng-off-white);
+    outline: none;
+  }
+
+  &.brp-tab-on {
+    color: var(--bng-off-white);
+    border-bottom-color: var(--bng-orange-400);
+  }
 }
 
 .brp-count {
@@ -282,6 +351,43 @@ onMounted(() => {
   padding-top: 0.25rem;
   border-top: 1px solid rgba(var(--bng-off-white-rgb), 0.15);
   font-size: 0.75rem;
+}
+
+.brp-hint {
+  padding: 0 0.25rem 0.25rem;
+  color: var(--bng-cool-gray-300);
+  font-size: 0.75rem;
+}
+
+.brp-mod {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--bng-corners-1);
+  background-color: rgba(var(--bng-off-white-rgb), 0.06);
+
+  &.brp-mod-disabled .brp-mod-status {
+    color: var(--bng-orange-400);
+  }
+
+  &.brp-mod-missing {
+    opacity: 0.6;
+  }
+}
+
+.brp-mod-features {
+  color: var(--bng-cool-gray-300);
+  font-size: 0.75rem;
+}
+
+.brp-mod-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 0 0 auto;
+  font-size: 0.75rem;
+  white-space: nowrap;
 }
 
 .brp-version {
