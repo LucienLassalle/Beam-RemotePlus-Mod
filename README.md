@@ -17,6 +17,8 @@ longer maintained.
 ## Features
 
 - Analog steering, throttle and brake through a virtual game controller.
+- Safety: when a phone loses the Wi-Fi for a second, or the player leaves,
+  its car no longer accelerates and brakes for 5 seconds.
 - Dashboard telemetry: speed, RPM, gear, fuel or battery, temperatures,
   warning lights, indicators, ABS/ESC/TCS, cruise control, g-forces, tyre
   pressures, drive mode.
