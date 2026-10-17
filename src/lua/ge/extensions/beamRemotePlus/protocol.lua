@@ -45,11 +45,23 @@ M.PONG_PREFIX = M.PREFIX .. '|pong|'
 M.DISCOVER_MESSAGE = M.PREFIX .. '|discover'
 M.HELLO_PREFIX = M.PREFIX .. '|hello|'
 M.CMD_PREFIX = 'cmd|'
+-- "cmd|leave": the player disconnects on purpose (see SIGNAL_LOST_MS).
+M.LEAVE_COMMAND = 'leave'
 
 M.CONTROL_PACKET_SIZE = 12
 M.MAX_DATAGRAM_SIZE = 512
 
 M.CLIENT_TIMEOUT_MS = 10000
+
+-- Watchdog: a driving phone silent for SIGNAL_LOST_MS (Wi-Fi drop, app
+-- killed...), or leaving on purpose, no longer accelerates: its car brakes
+-- at STOP_BRAKE with the wheel centred for up to STOP_DURATION_MS, and as
+-- soon as it is below STOPPED_SPEED the pedals are released and the
+-- handbrake holds it (an arcade gearbox would reverse on the brake).
+M.SIGNAL_LOST_MS = 1000
+M.STOP_BRAKE = 0.6
+M.STOP_DURATION_MS = 5000
+M.STOPPED_SPEED = 0.5 -- m/s
 M.TELEMETRY_INTERVAL_MS = 33 -- ~30 Hz
 M.HEARTBEAT_INTERVAL_MS = 5000
 
@@ -306,6 +318,11 @@ end
 function M.isClientTimedOut(now, lastSeen, timeoutMs)
   timeoutMs = timeoutMs or M.CLIENT_TIMEOUT_MS
   return (now - (lastSeen or 0)) > timeoutMs
+end
+
+-- No control packet for longer than SIGNAL_LOST_MS.
+function M.isSignalLost(now, lastControl)
+  return (now - (lastControl or 0)) > M.SIGNAL_LOST_MS
 end
 
 return M
