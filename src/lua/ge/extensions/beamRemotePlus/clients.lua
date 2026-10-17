@@ -241,6 +241,16 @@ function M.new(input, clock, vehicle)
     return lost, gone
   end
 
+  -- What the in-game panel shows for a phone still registered.
+  function self.status(client, now)
+    if client.leaving then return protocol.STATUS_DISCONNECTED end
+    if client.display then
+      return (now - (client.lastSeen or 0)) > protocol.DISPLAY_SIGNAL_LOST_MS and protocol.STATUS_SIGNAL_LOST
+        or protocol.STATUS_CONNECTED
+    end
+    return client.stoppingSince ~= nil and protocol.STATUS_SIGNAL_LOST or protocol.STATUS_CONNECTED
+  end
+
   function self.pulseButton(client, button)
     input.emit(client.deviceInst, 'button', button, 'change', 1)
     input.emit(client.deviceInst, 'button', button, 'change', 0)

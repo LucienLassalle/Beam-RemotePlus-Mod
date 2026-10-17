@@ -62,6 +62,15 @@ M.SIGNAL_LOST_MS = 1000
 M.STOP_BRAKE = 0.6
 M.STOP_DURATION_MS = 5000
 M.STOPPED_SPEED = 0.5 -- m/s
+
+-- What the in-game panel says of each phone. A second screen only pings
+-- every 2 s, so its signal is lost after DISPLAY_SIGNAL_LOST_MS; a
+-- disconnected phone stays listed for DISCONNECTED_SHOWN_MS.
+M.STATUS_CONNECTED = 'connected'
+M.STATUS_SIGNAL_LOST = 'signalLost'
+M.STATUS_DISCONNECTED = 'disconnected'
+M.DISPLAY_SIGNAL_LOST_MS = 5000
+M.DISCONNECTED_SHOWN_MS = 30000
 M.TELEMETRY_INTERVAL_MS = 33 -- ~30 Hz
 M.HEARTBEAT_INTERVAL_MS = 5000
 

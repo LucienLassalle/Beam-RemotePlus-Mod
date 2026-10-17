@@ -81,6 +81,10 @@ function M.new(deps)
   local NATIVE_SYNC_MS = 1000
   local lastNativeSync = nil
   local nativeWarned = false
+  -- Phones disconnected in the last DISCONNECTED_SHOWN_MS, still listed by
+  -- the panel (greyed out), and what it last showed of every phone.
+  local gone = {}
+  local lastStatuses = ''
 
   local function send(client, payload)
     deps.transport.send(payload, client.ip, protocol.CLIENT_PORT)
@@ -114,15 +118,47 @@ function M.new(deps)
   function self.isListening() return listening end
   function self.isLocked() return locked end
 
+  local function forget(ip)
+    for i = #gone, 1, -1 do
+      if gone[i].ip == ip then table.remove(gone, i) end
+    end
+  end
+
+  local function rememberGone(client)
+    forget(client.ip)
+    gone[#gone + 1] = {
+      ip = client.ip, device = client.deviceName, player = client.player, display = client.display,
+      appVersion = client.appVersion, at = deps.clock(),
+    }
+  end
+
+  -- One "ip=status" per phone: the panel is refreshed when it changes.
+  local function statuses(now)
+    local list = {}
+    clients.each(function(ip, client) list[#list + 1] = ip .. '=' .. clients.status(client, now) end)
+    for _, entry in ipairs(gone) do list[#list + 1] = entry.ip .. '=' .. protocol.STATUS_DISCONNECTED end
+    table.sort(list)
+    return table.concat(list, ',')
+  end
+
   function self.state()
+    local now = deps.clock()
     local phones = {}
     clients.each(function(ip, client)
       phones[#phones + 1] = {
         ip = ip, device = client.deviceName, player = client.player, protocol = client.version, display = client.display,
+        status = clients.status(client, now),
         -- update: 'app' or 'mod' when that side is older than the other one.
         appVersion = client.appVersion, update = versionModule.outdated(M.VERSION, client.appVersion),
       }
     end)
+    -- Disconnected phones last, without the update warning (nothing to do).
+    for _, entry in ipairs(gone) do
+      phones[#phones + 1] = {
+        ip = entry.ip, device = entry.device, player = entry.player, display = entry.display,
+        appVersion = entry.appVersion, status = protocol.STATUS_DISCONNECTED,
+      }
+    end
     return {
       version = M.VERSION,
       listening = listening,
@@ -135,7 +171,10 @@ function M.new(deps)
     }
   end
 
-  local function publish() pcall(deps.publishState, self.state()) end
+  local function publish()
+    lastStatuses = statuses(deps.clock())
+    pcall(deps.publishState, self.state())
+  end
 
   local function startListening()
     if listening then return true end
@@ -202,6 +241,7 @@ function M.new(deps)
     if not client then return false end
     if client.version >= 2 then send(client, protocol.buildKickedMessage()) end
     clients.disconnect(ip, releaseHold)
+    rememberGone(client)
     log.info('phone kicked: ' .. client.deviceName .. ' (' .. ip .. ')')
     deps.notify(deps.i18n.t('beamRemotePlus.toast.phoneKicked', { device = client.deviceName }), 'warning')
     publish()
@@ -250,6 +290,7 @@ function M.new(deps)
     end
     deps.transport.send(protocol.buildPongMessage(code, client.version, ping.prefix), ip, protocol.CLIENT_PORT)
     if isNew then
+      forget(ip)
       -- BeamNG does not notice virtual devices on its own: without a rescan
       -- the device is not assigned to a player until something else
       -- triggers one (e.g. toggling the mod).
@@ -275,6 +316,7 @@ function M.new(deps)
     -- The player left: the car brakes, then the phone is disconnected.
     if name == protocol.LEAVE_COMMAND then
       if clients.leave(client.ip, releaseHold) and client.display then
+        rememberGone(client)
         log.info('phone left: ' .. client.deviceName .. ' (' .. client.ip .. ')')
         deps.notify(deps.i18n.t('beamRemotePlus.toast.phoneDisconnected', { device = client.deviceName }), 'warning')
         publish()
@@ -374,15 +416,17 @@ function M.new(deps)
     local now = deps.clock()
     for _, client in ipairs(clients.expire(now, protocol.CLIENT_TIMEOUT_MS, releaseHold)) do
       log.info('phone timed out: ' .. client.deviceName .. ' (' .. client.ip .. ')')
+      rememberGone(client)
       deps.notify(deps.i18n.t('beamRemotePlus.toast.phoneDisconnected', { device = client.deviceName }), 'warning')
       publish()
     end
 
-    local lost, gone = clients.watchdog(now, releaseHold)
+    local lost, left = clients.watchdog(now, releaseHold)
     for _, client in ipairs(lost) do
       log.warn('no controls from ' .. client.deviceName .. ' (' .. client.ip .. '): its car brakes')
     end
-    for _, client in ipairs(gone) do
+    for _, client in ipairs(left) do
+      rememberGone(client)
       log.info('phone left: ' .. client.deviceName .. ' (' .. client.ip .. ')')
       deps.notify(deps.i18n.t('beamRemotePlus.toast.phoneDisconnected', { device = client.deviceName }), 'warning')
       publish()
@@ -395,6 +439,13 @@ function M.new(deps)
       local ok, err = pcall(self.handlePacket, ip, data)
       if not ok then log.throttled('packet', 3000, 'W', 'packet from ' .. tostring(ip) .. ' dropped: ' .. tostring(err)) end
     end
+
+    -- Live status of the phones in the panel: signal lost or back, and
+    -- disconnected phones dropped from the list after a while.
+    for i = #gone, 1, -1 do
+      if now - gone[i].at > protocol.DISCONNECTED_SHOWN_MS then table.remove(gone, i) end
+    end
+    if statuses(now) ~= lastStatuses then publish() end
 
     telemetry.tick(clients)
 
