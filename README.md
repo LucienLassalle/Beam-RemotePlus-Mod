@@ -70,7 +70,8 @@ newer) shows:
 - every connected phone with its player number (*Player 1*, *Player 2*…)
   or *Second screen*, the version of its app (when the app
   sends it), and a red cross to **kick** it after confirmation.
-  Its status is live: **Connected**, **Signal lost** (no news for a
+  A coloured bar shows the colour the game gives its player (its name tag
+  above the car in local multiplayer, also shown on the phone).   Its status is live: **Connected**, **Signal lost** (no news for a
   second: its car brakes for 5 seconds) or **Disconnected** (greyed out,
   listed 30 seconds more).
   A kicked phone goes back to its pairing screen and may connect again

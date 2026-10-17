@@ -81,7 +81,12 @@
     <template v-else>
       <div class="brp-list">
         <div v-if="!phones.length" class="brp-empty">{{ $t("beamRemotePlus.app.noPhone") }}</div>
-        <div v-for="phone in phones" :key="phone.ip" class="brp-phone" :class="'brp-phone-' + status(phone)">
+        <div
+          v-for="phone in phones"
+          :key="phone.ip"
+          class="brp-phone"
+          :class="'brp-phone-' + status(phone)"
+          :style="{ borderLeftColor: playerColor(phone) }">
           <BngIcon class="brp-phone-icon" :type="phone.display ? 'screen' : 'smartphone1'" />
           <div class="brp-phone-text">
             <span class="brp-phone-name">{{ phone.device }}</span>
@@ -202,6 +207,11 @@ function callMod(fn, ...args) {
 
 const setLocked = value => callMod("setLocked", !!value)
 const setDebug = value => callMod("setDebug", !!value)
+
+// Colour the game gives the player of each phone (its multiseat name tag,
+// server.lua), also shown by the app: everyone knows which phone drives
+// which car. None for a second screen or an unassigned phone.
+const playerColor = phone => phone.color || "transparent"
 
 // BeamNG players are 0-based; a phone is unassigned for a moment after pairing.
 const playerNumber = phone => (phone.player === undefined || phone.player === null ? "?" : phone.player + 1)
@@ -402,6 +412,7 @@ onMounted(() => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.25rem 0.25rem 0.25rem 0.5rem;
+  border-left: 0.25rem solid transparent;
   border-radius: var(--bng-corners-1);
   background-color: rgba(var(--bng-off-white-rgb), 0.06);
 }

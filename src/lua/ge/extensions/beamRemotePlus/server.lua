@@ -47,6 +47,7 @@ deps:
   getSecurityCode()           -> string or nil
   getHostLabel()              -> string
   getHostAddress()            optional, -> the PC address on the local network
+  playerColor(player)         optional, -> "#rrggbb", the colour the game gives that player
   getVehicle(player)          -> vehicle or nil
   listVehicles()              -> radar descriptions of every car (optional)
   switchVehicle(player, dir)  -> ok, err
@@ -125,11 +126,19 @@ function M.new(deps)
     end
   end
 
+  -- Colour of the player of a driving phone, as the game shows it above its
+  -- car in local multiplayer; nil for a second screen or while unassigned.
+  local function colorOf(client)
+    if client.display or client.player == nil or not deps.playerColor then return nil end
+    local ok, color = pcall(deps.playerColor, client.player)
+    return ok and color or nil
+  end
+
   local function rememberGone(client)
     forget(client.ip)
     gone[#gone + 1] = {
       ip = client.ip, device = client.deviceName, player = client.player, display = client.display,
-      appVersion = client.appVersion, at = deps.clock(),
+      appVersion = client.appVersion, color = colorOf(client), at = deps.clock(),
     }
   end
 
@@ -149,6 +158,7 @@ function M.new(deps)
       phones[#phones + 1] = {
         ip = ip, device = client.deviceName, player = client.player, protocol = client.version, display = client.display,
         status = clients.status(client, now),
+        color = colorOf(client),
         -- update: 'app' or 'mod' when that side is older than the other one.
         appVersion = client.appVersion, update = versionModule.outdated(M.VERSION, client.appVersion),
       }
@@ -158,6 +168,7 @@ function M.new(deps)
       phones[#phones + 1] = {
         ip = entry.ip, device = entry.device, player = entry.player, display = entry.display,
         appVersion = entry.appVersion, status = protocol.STATUS_DISCONNECTED,
+        color = entry.color,
       }
     end
     return {
@@ -310,6 +321,7 @@ function M.new(deps)
     if client.version < 2 then return end
     send(client, protocol.buildSessionMessage({
       modVersion = M.VERSION, player = client.player, commands = commands.names(),
+      playerColor = colorOf(client),
       optionalMods = optionalMods.states(),
     }))
   end
