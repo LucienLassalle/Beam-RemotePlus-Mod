@@ -45,6 +45,8 @@ M.PONG_PREFIX = M.PREFIX .. '|pong|'
 M.DISCOVER_MESSAGE = M.PREFIX .. '|discover'
 M.HELLO_PREFIX = M.PREFIX .. '|hello|'
 M.CMD_PREFIX = 'cmd|'
+-- "cmd|leave": the player disconnects on purpose (see SIGNAL_LOST_MS).
+M.LEAVE_COMMAND = 'leave'
 
 M.CONTROL_PACKET_SIZE = 12
 M.MAX_DATAGRAM_SIZE = 512
@@ -52,7 +54,7 @@ M.MAX_DATAGRAM_SIZE = 512
 M.CLIENT_TIMEOUT_MS = 10000
 
 -- Watchdog: a driving phone silent for SIGNAL_LOST_MS (Wi-Fi drop, app
--- killed...) no longer accelerates: its car brakes
+-- killed...), or leaving on purpose, no longer accelerates: its car brakes
 -- at STOP_BRAKE with the wheel centred for STOP_DURATION_MS, then the
 -- brake is released.
 M.SIGNAL_LOST_MS = 1000

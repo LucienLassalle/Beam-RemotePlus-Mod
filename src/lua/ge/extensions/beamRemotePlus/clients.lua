@@ -44,7 +44,9 @@ function M.new(input, clock)
     local client = clients[ip]
     -- Same phone switching between controller and second-screen roles:
     -- start a fresh session with the new role.
-    if client and (client.display == true) ~= (ping.role == protocol.ROLE_DISPLAY) then
+    -- Same for a phone pairing again while its car still brakes after it
+    -- left.
+    if client and ((client.display == true) ~= (ping.role == protocol.ROLE_DISPLAY) or client.leaving) then
       self.disconnect(ip)
       client = nil
     end
@@ -82,7 +84,8 @@ function M.new(input, clock)
       forceEmit = true, -- first control packet always emits every axis
       lastSeen = clock(),
       lastControl = clock(), -- watchdog, see self.watchdog
-      stoppingSince = nil, -- ms: the car brakes because the phone went silent
+      stoppingSince = nil, -- ms: the car brakes because the phone went silent or left
+      leaving = false,  -- the player left: disconnected once the car stopped
     }
     clients[ip] = client
     return client, true
@@ -149,8 +152,10 @@ function M.new(input, clock)
     client.state = values
   end
 
-  -- A phone back after a silence drives again at once.
+  -- A phone that left keeps braking until the watchdog disconnects it;
+  -- a phone back after a silence drives again at once.
   function self.applyControl(client, steering, throttle, brake)
+    if client.leaving then return end
     local values = { protocol.clampUnit(steering), protocol.clampUnit(throttle), protocol.clampUnit(brake) }
     local force = client.forceEmit or client.stoppingSince ~= nil
     client.forceEmit = false
@@ -170,11 +175,21 @@ function M.new(input, clock)
     emitAxes(client, { 0.5, 0, protocol.STOP_BRAKE }, true)
   end
 
+  -- The player left on purpose: same braking, then disconnected.
+  function self.leave(ip, onRelease)
+    local client = clients[ip]
+    if not client then return nil end
+    if client.display or not client.deviceInst then return self.disconnect(ip, onRelease) end
+    client.leaving = true
+    if client.stoppingSince == nil then startStopping(client, clock(), onRelease) end
+    return client
+  end
+
   -- Per-frame safety of the driving phones. Returns the clients whose car
-  -- started braking (signal lost).
+  -- started braking (signal lost) and those who left and are now gone.
   function self.watchdog(now, onRelease)
-    local lost = {}
-    self.each(function(_, client)
+    local lost, gone = {}, {}
+    self.each(function(ip, client)
       if client.display or not client.deviceInst then return end
       local since = client.stoppingSince
       if since == nil then
@@ -184,9 +199,10 @@ function M.new(input, clock)
         end
       elseif now - since >= protocol.STOP_DURATION_MS and client.state[3] ~= 0 then
         emitAxes(client, { 0.5, 0, 0 }, false)
+        if client.leaving then gone[#gone + 1] = self.disconnect(ip, onRelease) end
       end
     end)
-    return lost
+    return lost, gone
   end
 
   function self.pulseButton(client, button)

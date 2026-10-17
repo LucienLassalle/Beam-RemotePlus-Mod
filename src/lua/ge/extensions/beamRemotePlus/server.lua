@@ -245,6 +245,17 @@ function M.new(deps)
   local function handleCommand(client, data)
     local name, arg = protocol.parseCommand(data)
     if not name then return end
+    -- The player left: the car brakes, then the phone is disconnected.
+    if name == protocol.LEAVE_COMMAND then
+      if clients.leave(client.ip, releaseHold) and client.display then
+        log.info('phone left: ' .. client.deviceName .. ' (' .. client.ip .. ')')
+        deps.notify(deps.i18n.t('beamRemotePlus.toast.phoneDisconnected', { device = client.deviceName }), 'warning')
+        publish()
+      else
+        log.info('phone leaving, its car stops: ' .. client.deviceName .. ' (' .. client.ip .. ')')
+      end
+      return
+    end
     local ok, err, canonical
     if client.display and not commandsModule.DISPLAY_COMMANDS[name] then
       ok, err, canonical = false, 'display_only', name
@@ -339,10 +350,16 @@ function M.new(deps)
       publish()
     end
 
-    local lost = clients.watchdog(now, releaseHold)
+    local lost, gone = clients.watchdog(now, releaseHold)
     for _, client in ipairs(lost) do
       log.warn('no controls from ' .. client.deviceName .. ' (' .. client.ip .. '): its car brakes')
     end
+    for _, client in ipairs(gone) do
+      log.info('phone left: ' .. client.deviceName .. ' (' .. client.ip .. ')')
+      deps.notify(deps.i18n.t('beamRemotePlus.toast.phoneDisconnected', { device = client.deviceName }), 'warning')
+      publish()
+    end
+
     for _ = 1, M.MAX_PACKETS_PER_FRAME do
       local data, ip = deps.transport.receive()
       if not data then break end
