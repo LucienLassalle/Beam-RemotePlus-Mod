@@ -66,6 +66,12 @@ Sent at ~60 Hz. Each phone gets its own virtual input device named
 `BeamRemotePlus (<device name>)` (input map `bngremoteplusv1`), which BeamNG
 assigns to a player in local multiplayer.
 
+**Watchdog.** A driving phone that sends no control packet for **1 s**
+(Wi-Fi drop, app closed or frozen) no longer accelerates: the mod sets its
+axes to steering 0.5, throttle 0, brake 0.6 for **5 s**, then releases the
+brake, and releases its hold commands (horn...). The next control packet
+gives the controls back at once. A second screen never brakes.
+
 ## 4. Commands
 
 ```
@@ -95,6 +101,7 @@ cmd|<name>|1 / |0     hold commands (pressed / released)
 | `cam_next`, `cam_prev` | press | camera |
 | `debug` | hold | `1` = acknowledge every command, `0` = errors only |
 | `skeleton` | press | sends the skeleton of the vehicle (`skeleton` messages below) |
+| `leave` | press | the player disconnects on purpose: the car brakes like a lost signal (watchdog above), then the phone is disconnected (a second screen at once); never acknowledged |
 
 Version 1 aliases: `recover_start` = `recover|1`, `recover_stop` = `recover|0`.
 
