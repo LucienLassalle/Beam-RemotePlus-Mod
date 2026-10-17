@@ -135,6 +135,11 @@ flowchart LR
   New-NetFirewallRule -DisplayName "Beam-RemotePlus" -Direction Inbound -Protocol UDP -LocalPort 4444,4446 -Action Allow
   ```
 
+  With the phone's connection shared over USB (USB tethering), Windows sees
+  a new network, usually classified as **Public**: the rule above covers
+  every network profile, while an "allow" given only to private networks at
+  the Windows prompt does not.
+
   If **Cancel** was clicked on the Windows prompt, Windows created *block*
   rules for BeamNG.drive, and a block rule always wins over an allow rule.
   List them, then remove them (Windows asks again on the next launch):
