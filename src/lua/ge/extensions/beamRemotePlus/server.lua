@@ -46,6 +46,7 @@ deps:
   publishState(state)         pushes state to the in-game UI app
   getSecurityCode()           -> string or nil
   getHostLabel()              -> string
+  getHostAddress()            optional, -> the PC address on the local network
   getVehicle(player)          -> vehicle or nil
   listVehicles()              -> radar descriptions of every car (optional)
   switchVehicle(player, dir)  -> ok, err
@@ -165,6 +166,9 @@ function M.new(deps)
       locked = locked,
       debug = deps.config.get('debug'),
       code = listening and deps.getSecurityCode() or nil,
+      -- QR code of the panel, null until the pairing code is known.
+      pairingUri = listening and protocol.buildPairingUri(deps.getSecurityCode(),
+        deps.getHostAddress and deps.getHostAddress()) or nil,
       port = protocol.HOST_PORT,
       phones = phones,
       optionalMods = optionalMods.list(),

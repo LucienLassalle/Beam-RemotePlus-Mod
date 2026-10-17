@@ -50,6 +50,20 @@ local function getHostLabel()
   return 'BeamNG.drive'
 end
 
+-- Address of the PC on the local network, for the pairing QR code: the
+-- interface of the default route, found by "connecting" a UDP socket (no
+-- packet is sent). Nil when offline.
+local function getHostAddress()
+  local ok, address = pcall(function()
+    local udp = socket.udp()
+    udp:setpeername('192.0.2.1', 9)
+    local ip = udp:getsockname()
+    udp:close()
+    return ip
+  end)
+  return ok and address or nil
+end
+
 local function getVehicle(player)
   if type(getPlayerVehicle) ~= 'function' then return nil end
   return getPlayerVehicle(player)
@@ -95,6 +109,7 @@ local function createServer()
     getSecurityCode = getSecurityCode,
     nativeRemote = nativeRemote,
     getHostLabel = getHostLabel,
+    getHostAddress = getHostAddress,
     getVehicle = getVehicle,
     listVehicles = listVehicles,
     switchVehicle = switchVehicle,

@@ -44,6 +44,7 @@ local function setup(opts)
     publishState = function(state) env.states[#env.states + 1] = state end,
     getSecurityCode = function() if opts.noCode then return nil end return CODE end,
     getHostLabel = function() return "Test's PC" end,
+    getHostAddress = function() return '192.168.1.20' end,
     getVehicle = function() return env.vehicle end,
     switchVehicle = function() return true end,
     cycleCamera = function() return true end,
@@ -554,5 +555,18 @@ t.describe('server: phone status in the panel', function()
     env.clock.advance(1)
     env.server.update()
     t.assertEquals(lastPhones(env)[1].status, 'signalLost')
+  end)
+end)
+
+t.describe('server: pairing QR code', function()
+  t.it('gives the panel a QR code with the code and the PC address', function()
+    local env = setup()
+    env.server.update()
+    t.assertEquals(env.states[#env.states].pairingUri, 'beamremoteplus://pair?code=20367&host=192.168.1.20#20367')
+  end)
+  t.it('has no QR code without a pairing code', function()
+    local env = setup({ noCode = true })
+    env.server.update()
+    t.assertNil(env.server.state().pairingUri)
   end)
 end)
