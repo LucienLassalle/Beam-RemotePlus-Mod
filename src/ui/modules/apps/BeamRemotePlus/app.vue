@@ -39,7 +39,7 @@
     <div class="brp-tabs">
       <button type="button" class="brp-tab" :class="{ 'brp-tab-on': !showMods }" @click="showMods = false">
         <span>{{ $t("beamRemotePlus.app.phones") }}</span>
-        <span class="brp-count">{{ phones.length }}</span>
+        <span class="brp-count">{{ activeCount }}</span>
       </button>
       <button type="button" class="brp-tab" :class="{ 'brp-tab-on': showMods }" @click="showMods = true">
         <span>{{ $t("beamRemotePlus.app.optionalMods") }}</span>
@@ -66,10 +66,14 @@
     <template v-else>
       <div class="brp-list">
         <div v-if="!phones.length" class="brp-empty">{{ $t("beamRemotePlus.app.noPhone") }}</div>
-        <div v-for="phone in phones" :key="phone.ip" class="brp-phone">
+        <div v-for="phone in phones" :key="phone.ip" class="brp-phone" :class="'brp-phone-' + status(phone)">
           <BngIcon class="brp-phone-icon" :type="phone.display ? 'screen' : 'smartphone1'" />
           <div class="brp-phone-text">
             <span class="brp-phone-name">{{ phone.device }}</span>
+            <span class="brp-phone-status">
+              <span class="brp-status-dot" />
+              {{ $t(STATUS_TEXTS[status(phone)]) }}
+            </span>
             <span class="brp-phone-role">
               {{ phone.display ? $t("beamRemotePlus.app.secondScreen") + " · " : "" }}{{ $t("beamRemotePlus.app.player") }} {{ playerNumber(phone) }}{{ phone.appVersion ? " · v" + phone.appVersion : "" }}
             </span>
@@ -79,6 +83,7 @@
             </span>
           </div>
           <BngButton
+            v-if="status(phone) !== 'disconnected'"
             class="brp-kick"
             :accent="ACCENTS.ghost"
             icon="xmark"
@@ -110,6 +115,16 @@ const events = useEvents()
 
 const state = ref({ listening: false, locked: false, debug: false, phones: [], version: "" })
 const phones = computed(() => state.value.phones || [])
+
+// Live status of each phone (server.lua): a disconnected phone stays listed,
+// greyed out, for 30 seconds. Older Lua sides send no status.
+const status = phone => phone.status || "connected"
+const STATUS_TEXTS = {
+  connected: "beamRemotePlus.app.statusConnected",
+  signalLost: "beamRemotePlus.app.statusSignalLost",
+  disconnected: "beamRemotePlus.app.statusDisconnected",
+}
+const activeCount = computed(() => phones.value.filter(phone => status(phone) !== "disconnected").length)
 
 // Optional mods the mod works with and whether each one is enabled,
 // installed but disabled, or missing (optionalMods.lua), in their own tab
@@ -338,6 +353,33 @@ onMounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.brp-phone-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--bng-add-green-400);
+}
+
+.brp-status-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background-color: currentColor;
+}
+
+.brp-phone-signalLost .brp-phone-status {
+  color: var(--bng-orange-400);
+}
+
+.brp-phone-disconnected {
+  opacity: 0.55;
+
+  .brp-phone-status {
+    color: var(--bng-cool-gray-300);
+  }
 }
 
 .brp-phone-role {
