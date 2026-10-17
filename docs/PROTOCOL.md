@@ -94,6 +94,7 @@ cmd|<name>|1 / |0     hold commands (pressed / released)
 | `highbeam` | hold | high beams while held (headlight flash) |
 | `starter` | hold | ignition / starter key |
 | `recover` | hold | rewind like the Insert key (short = small reset) |
+| `handbrake` | hold | parking brake while held (drifting) |
 | `hazard`, `signal_left`, `signal_right` | press | indicators |
 | `lights` | press | cycle headlights |
 | `parkingbrake` | press | toggle parking brake |
@@ -155,6 +156,7 @@ provide it (show "n/a", do not assume 0).
 | `hasPitLimiter`, `pitLimiter` | pit limiter of the fr04 vehicle mods (F4, CF26): present, on |
 | `odometer`, `trip` | metres |
 | `gx`, `gy`, `gz` | smoothed acceleration, m/s² |
+| `driftAngle` | degrees -180..180 from where the car points to where it goes, counter-clockwise seen from above (positive: it goes to the left of its nose); omitted below 3 m/s |
 | `shiftLight` | bool |
 | `tirePressures` | object `{ "FL": kPa, "FR": kPa, ... }` |
 | `tirePressuresNominal` | same, the pressures set in the vehicle configuration (compare to them, race cars run low pressures) |
