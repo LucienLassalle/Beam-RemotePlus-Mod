@@ -62,7 +62,9 @@ out new phones** action (Options > Controls > General) or the optional
 The optional **Beam-RemotePlus** UI app (UI apps menu, BeamNG.drive 0.39 or
 newer) shows:
 
-- the pairing code;
+- the pairing code, and with the **QR** button its QR code, to scan with
+  the app (it also holds the PC address, so the phone finds the PC even
+  without broadcast); both stay hidden until clicked;
 - **Lock out new phones**: phones already connected keep driving, new ones
   cannot pair (until the game restarts);
 - every connected phone with its player number (*Player 1*, *Player 2*…)
