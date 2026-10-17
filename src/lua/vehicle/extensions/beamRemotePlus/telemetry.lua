@@ -90,6 +90,21 @@ function M.drsOpen(e)
   return nil
 end
 
+-- Drift angle (degrees, -180..180): from where the car points to where it
+-- goes, on the ground plane, counter-clockwise seen from above: positive
+-- when it goes to the left of its nose (the nose points right, as when
+-- drifting through a right-hand bend). Nil below DRIFT_MIN_SPEED (the
+-- direction of travel is meaningless).
+-- vx, vy: velocity; fx, fy: forward direction (world, z up).
+M.DRIFT_MIN_SPEED = 3 -- m/s
+function M.driftAngle(vx, vy, fx, fy)
+  vx, vy, fx, fy = finite(vx), finite(vy), finite(fx), finite(fy)
+  if not (vx and vy and fx and fy) then return nil end
+  if math.sqrt(vx * vx + vy * vy) < M.DRIFT_MIN_SPEED then return nil end
+  local angle = math.deg(math.atan2(fx * vy - fy * vx, fx * vx + fy * vy))
+  return math.floor(angle * 10 + 0.5) / 10
+end
+
 local PSI_TO_KPA = 6.894757
 
 -- Pressure each tyre was inflated to in the vehicle configuration (kPa,
@@ -179,6 +194,7 @@ function M.collect(e, extra)
     gy = round(extra.gy, 3),
     gz = round(extra.gz, 3),
     envTemp = round(extra.envTemp, 1),
+    driftAngle = extra.driftAngle,
     driveMode = extra.driveMode,
     -- Emergency lights and siren: only for vehicles fitted with them (every
     -- vehicle has a lightbar electric).
@@ -440,6 +456,7 @@ function M.send()
     local devices = powertrainDevices()
     local clutchTemp, clutchState = drivetrain.clutch(devices)
     local spin, lock = drivetrain.spinLock(wheelSurfaceSpeeds(), electrics.values.airspeed)
+    local velocity, forward = obj:getVelocity(), obj:getDirectionVector()
     local extra = {
       tirePressuresNominal = fixed.nominal,
       drivetrain = fixed.drivetrain,
@@ -455,6 +472,7 @@ function M.send()
       gy = sensors and sensors.gy2,
       gz = sensors and sensors.gz2,
       envTemp = obj.getEnvTemperature and (obj:getEnvTemperature() - 273.15) or nil,
+      driftAngle = M.driftAngle(velocity.x, velocity.y, forward.x, forward.y),
       tirePressures = readTirePressures(),
       wheelSlip = maxWheelSlip(),
       damage = readDamage(),
