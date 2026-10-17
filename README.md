@@ -18,7 +18,8 @@ longer maintained.
 
 - Analog steering, throttle and brake through a virtual game controller.
 - Safety: when a phone loses the Wi-Fi for a second, or the player leaves,
-  its car no longer accelerates and brakes for 5 seconds.
+  its car no longer accelerates: it brakes until it stops (5 seconds at
+  most), then the handbrake holds it.
 - Dashboard telemetry: speed, RPM, gear, fuel or battery, temperatures,
   warning lights, indicators, ABS/ESC/TCS, cruise control, g-forces, tyre
   pressures, drive mode.
