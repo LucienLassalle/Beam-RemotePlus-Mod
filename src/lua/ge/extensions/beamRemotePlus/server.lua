@@ -339,6 +339,10 @@ function M.new(deps)
       publish()
     end
 
+    local lost = clients.watchdog(now, releaseHold)
+    for _, client in ipairs(lost) do
+      log.warn('no controls from ' .. client.deviceName .. ' (' .. client.ip .. '): its car brakes')
+    end
     for _ = 1, M.MAX_PACKETS_PER_FRAME do
       local data, ip = deps.transport.receive()
       if not data then break end

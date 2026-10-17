@@ -81,6 +81,8 @@ function M.new(input, clock)
       debug = false,    -- per-client debug acks
       forceEmit = true, -- first control packet always emits every axis
       lastSeen = clock(),
+      lastControl = clock(), -- watchdog, see self.watchdog
+      stoppingSince = nil, -- ms: the car brakes because the phone went silent
     }
     clients[ip] = client
     return client, true
@@ -137,10 +139,7 @@ function M.new(input, clock)
 
   -- Emits only the axes that changed (or all of them when forceEmit is set,
   -- needed after a vehicle switch so BeamNG gives this device priority).
-  function self.applyControl(client, steering, throttle, brake)
-    local values = { protocol.clampUnit(steering), protocol.clampUnit(throttle), protocol.clampUnit(brake) }
-    local force = client.forceEmit
-    client.forceEmit = false
+  local function emitAxes(client, values, force)
     for axis = 0, 2 do
       local v = values[axis + 1]
       if force or client.state[axis + 1] ~= v then
@@ -148,7 +147,46 @@ function M.new(input, clock)
       end
     end
     client.state = values
+  end
+
+  -- A phone back after a silence drives again at once.
+  function self.applyControl(client, steering, throttle, brake)
+    local values = { protocol.clampUnit(steering), protocol.clampUnit(throttle), protocol.clampUnit(brake) }
+    local force = client.forceEmit or client.stoppingSince ~= nil
+    client.forceEmit = false
+    client.stoppingSince = nil
+    emitAxes(client, values, force)
     client.lastSeen = clock()
+    client.lastControl = clock()
+  end
+
+  -- Starts braking the car of a driving phone (see protocol.SIGNAL_LOST_MS).
+  local function startStopping(client, now, onRelease)
+    client.stoppingSince = now
+    for name in pairs(client.holds) do
+      if onRelease then pcall(onRelease, client, name) end
+    end
+    client.holds = {}
+    emitAxes(client, { 0.5, 0, protocol.STOP_BRAKE }, true)
+  end
+
+  -- Per-frame safety of the driving phones. Returns the clients whose car
+  -- started braking (signal lost).
+  function self.watchdog(now, onRelease)
+    local lost = {}
+    self.each(function(_, client)
+      if client.display or not client.deviceInst then return end
+      local since = client.stoppingSince
+      if since == nil then
+        if protocol.isSignalLost(now, client.lastControl) then
+          startStopping(client, now, onRelease)
+          lost[#lost + 1] = client
+        end
+      elseif now - since >= protocol.STOP_DURATION_MS and client.state[3] ~= 0 then
+        emitAxes(client, { 0.5, 0, 0 }, false)
+      end
+    end)
+    return lost
   end
 
   function self.pulseButton(client, button)

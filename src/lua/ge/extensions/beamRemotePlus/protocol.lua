@@ -50,6 +50,14 @@ M.CONTROL_PACKET_SIZE = 12
 M.MAX_DATAGRAM_SIZE = 512
 
 M.CLIENT_TIMEOUT_MS = 10000
+
+-- Watchdog: a driving phone silent for SIGNAL_LOST_MS (Wi-Fi drop, app
+-- killed...) no longer accelerates: its car brakes
+-- at STOP_BRAKE with the wheel centred for STOP_DURATION_MS, then the
+-- brake is released.
+M.SIGNAL_LOST_MS = 1000
+M.STOP_BRAKE = 0.6
+M.STOP_DURATION_MS = 5000
 M.TELEMETRY_INTERVAL_MS = 33 -- ~30 Hz
 M.HEARTBEAT_INTERVAL_MS = 5000
 
@@ -306,6 +314,11 @@ end
 function M.isClientTimedOut(now, lastSeen, timeoutMs)
   timeoutMs = timeoutMs or M.CLIENT_TIMEOUT_MS
   return (now - (lastSeen or 0)) > timeoutMs
+end
+
+-- No control packet for longer than SIGNAL_LOST_MS.
+function M.isSignalLost(now, lastControl)
+  return (now - (lastControl or 0)) > M.SIGNAL_LOST_MS
 end
 
 return M
