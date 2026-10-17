@@ -178,6 +178,17 @@ function M.buildHelloMessage(code, label, prefix)
   return (prefix or M.PREFIX) .. '|hello|' .. tostring(code) .. '|' .. label
 end
 
+-- Pairing QR code of the in-game panel:
+--   beamremoteplus://pair?code=<code>[&host=<PC address>]#<code>
+-- The app connects to the host first (no broadcast needed); the "#<code>"
+-- end keeps it readable by apps that only look for the code after "#".
+function M.buildPairingUri(code, host)
+  if code == nil then return nil end
+  local uri = 'beamremoteplus://pair?code=' .. tostring(code)
+  if type(host) == 'string' and host:match('^%d+%.%d+%.%d+%.%d+$') and not host:match('^127%.') and host ~= '0.0.0.0' then uri = uri .. '&host=' .. host end
+  return uri .. '#' .. tostring(code)
+end
+
 -- Commands ----------------------------------------------------------------
 
 -- "cmd|horn|1" -> "horn", "1" ; "cmd|next_vehicle" -> "next_vehicle", nil

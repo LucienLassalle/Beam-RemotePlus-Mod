@@ -22,6 +22,21 @@
         <BngIcon :type="codeShown ? 'eyeSolidOpened' : 'eyeSolidClosed'" color="var(--bng-off-black)" />
         <span class="brp-code-digits">{{ codeShown ? state.code : maskedCode }}</span>
       </button>
+      <button
+        v-if="state.pairingUri"
+        type="button"
+        class="brp-code brp-qr-toggle"
+        :class="{ 'brp-code-shown': qrShown }"
+        :title="$t(qrShown ? 'beamRemotePlus.app.qrHide' : 'beamRemotePlus.app.qrShow')"
+        @click="qrShown = !qrShown">
+        QR
+      </button>
+    </div>
+
+    <div v-if="qrShown && state.pairingUri" class="brp-qr">
+      <div ref="qrEl" class="brp-qr-image" />
+      <span v-if="qrFailed" class="brp-qr-fallback">{{ state.code }}</span>
+      <span class="brp-hint">{{ $t("beamRemotePlus.app.qrHint") }}</span>
     </div>
 
     <div v-if="state.port && !state.listening" class="brp-alert">
@@ -103,7 +118,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue"
+import { ref, computed, onMounted, watch, nextTick } from "vue"
 import { useBridge } from "@/bridge"
 import { useEvents } from "@/services/events"
 import { openConfirmation, confirmCancelButtons } from "@/services/popup"
@@ -152,6 +167,32 @@ const modText = mod => MOD_TEXTS[mod.id] || { name: mod.id, features: "" }
 // (streams, screenshots), hidden again on a second click.
 const codeShown = ref(false)
 const maskedCode = computed(() => Array.from(String(state.value.code || "")).map(() => "X").join(" "))
+
+// Pairing QR code (code + PC address, see protocol.buildPairingUri): hidden
+// like the code, drawn with the QRCode library the game's UI already loads.
+const qrShown = ref(false)
+const qrEl = ref(null)
+const qrFailed = ref(false)
+const QR_SIZE = 160
+
+async function drawQr() {
+  await nextTick()
+  const el = qrEl.value
+  if (!el) return
+  el.innerHTML = ""
+  const QRCodeLib = window.QRCode
+  qrFailed.value = typeof QRCodeLib !== "function"
+  if (qrFailed.value) return
+  try {
+    new QRCodeLib(el, { text: state.value.pairingUri, width: QR_SIZE, height: QR_SIZE, correctLevel: QRCodeLib.CorrectLevel.M })
+  } catch {
+    qrFailed.value = true
+  }
+}
+
+watch([qrShown, () => state.value.pairingUri], ([shown, uri]) => {
+  if (shown && uri) drawQr()
+})
 
 // The extension may not be loaded yet (or anymore): never raise a Lua error.
 // Arguments are booleans and IP strings, written the same in JSON and Lua.
@@ -253,6 +294,33 @@ onMounted(() => {
 
 .brp-code-digits {
   white-space: nowrap;
+}
+
+.brp-qr-toggle {
+  font-family: inherit;
+  letter-spacing: 0.05em;
+}
+
+.brp-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0;
+}
+
+.brp-qr-image {
+  padding: 0.5rem;
+  border-radius: var(--bng-corners-1);
+  background-color: #fff;
+  line-height: 0;
+}
+
+.brp-qr-fallback {
+  font-family: var(--fnt-mono);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
 }
 
 .brp-alert {

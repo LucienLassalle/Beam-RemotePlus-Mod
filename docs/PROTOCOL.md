@@ -27,6 +27,12 @@ PC    → phone:4447       beamremoteplus|hello|<code>|<label>
 
 `<label>` is a readable PC name ("Loka's PC"), never contains `|`.
 
+**Pairing QR code.** The in-game panel shows a QR code holding
+`beamremoteplus://pair?code=<code>&host=<PC address>#<code>` (`&host=` is
+left out when the PC address is unknown). The app pings that address
+first, then the broadcast addresses. The `#<code>` end keeps the code
+readable by apps that only look for it after `#`.
+
 ## 2. Pairing (ping / pong)
 
 ```
