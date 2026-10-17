@@ -31,6 +31,9 @@ M.HOLD_ACTIONS = {
   -- Mirrors the native "Insert" key: short hold = small reposition, long
   -- hold = rewind further back in the position history.
   recover = { on = 'recovery.startRecovering()', off = 'recovery.stopRecovering()' },
+  -- Same as the "parking brake (hold)" input action: the handbrake only
+  -- while held, for drifting.
+  handbrake = { on = "input.event('parkingbrake', 1, -1)", off = "input.event('parkingbrake', 0, -1)" },
 }
 
 M.PRESS_ACTIONS = {
