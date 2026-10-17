@@ -14,10 +14,12 @@ package.loaded['extensions/beamRemotePlus/damage'] = nil
 package.loaded['extensions/beamRemotePlus/tyres'] = nil
 package.loaded['extensions/beamRemotePlus/drivetrain'] = nil
 package.loaded['extensions/beamRemotePlus/skeleton'] = nil
+package.loaded['extensions/beamRemotePlus/features'] = nil
 local damage = require('extensions/beamRemotePlus/damage')
 local tyres = require('extensions/beamRemotePlus/tyres')
 local drivetrain = require('extensions/beamRemotePlus/drivetrain')
 local skeleton = require('extensions/beamRemotePlus/skeleton')
+local features = require('extensions/beamRemotePlus/features')
 
 local M = {}
 
@@ -486,6 +488,20 @@ function M.sendSkeleton()
   end)
   if not ok and log then
     log('W', 'beamRemotePlus', 'skeleton failed: ' .. tostring(err))
+  end
+end
+
+-- Generic commands the vehicle is fitted for, on request of a phone
+-- (cmd|actions): the GE side adds the vehicle's own actions and answers.
+function M.sendFeatures()
+  local ok, err = pcall(function()
+    local list = features.collect(controller and controller.getControllersByType, powertrainDevices())
+    obj:queueGameEngineLua(string.format(
+      'if extensions.beamRemotePlus_main then extensions.beamRemotePlus_main.onVehicleFeatures(%d, %s) end',
+      obj:getID(), serialize(list)))
+  end)
+  if not ok and log then
+    log('W', 'beamRemotePlus', 'features failed: ' .. tostring(err))
   end
 end
 
