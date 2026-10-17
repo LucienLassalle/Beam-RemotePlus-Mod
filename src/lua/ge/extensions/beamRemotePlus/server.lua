@@ -15,6 +15,25 @@ local M = {}
 M.VERSION = 'dev'
 M.MAX_PACKETS_PER_FRAME = 256
 
+-- Holds or releases the handbrake, like the "parking brake (hold)" input
+-- action of the game.
+function M.handbrakeCode(on)
+  return string.format("input.event('parkingbrake', %d, -1)", on and 1 or 0)
+end
+
+-- What the watchdog needs of a telemetry snapshot: speed (m/s), whether
+-- the car is in reverse, and whether its gearbox is in arcade mode (where
+-- the pedals swap in reverse).
+function M.motionOf(t)
+  local speed = tonumber(t.airspeed) or tonumber(t.speed)
+  if not speed then return nil end
+  return {
+    speed = math.abs(speed),
+    reverse = (tonumber(t.gearIndex) or 0) < 0 or t.gear == 'R',
+    arcade = t.gearboxMode == 'arcade',
+  }
+end
+
 --[[
 deps:
   transport   { open(port) -> ok, err ; close() ; receive() -> data, ip ; send(payload, ip, port) }
@@ -40,7 +59,15 @@ deps:
 function M.new(deps)
   local self = {}
   local log = deps.logger
-  local clients = clientsModule.new(deps.input, deps.clock)
+  -- Last known motion of each car (from its telemetry), for the watchdog.
+  local motions = {}
+  local clients = clientsModule.new(deps.input, deps.clock, {
+    motion = function(client) return client.vehicleId and motions[client.vehicleId] or nil end,
+    setHandbrake = function(client, on)
+      local vehicle = deps.getVehicle(client.player or 0)
+      if vehicle then vehicle:queueLuaCommand(M.handbrakeCode(on)) end
+    end,
+  })
   local listening = false
   local lastDiscoverToast = 0
   local lastHeartbeat = 0
@@ -318,6 +345,7 @@ function M.new(deps)
   end
 
   function self.onTelemetry(vehicleId, t)
+    if type(t) == 'table' then motions[vehicleId] = M.motionOf(t) end
     return telemetry.dispatch(clients, vehicleId, t)
   end
 

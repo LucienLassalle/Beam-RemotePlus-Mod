@@ -2,8 +2,9 @@
 -- (3 analog axes + 2 buttons), which is what makes local multiplayer work:
 -- BeamNG's multiseat assigns every input device to its own player.
 --
--- Dependencies are injected (input = core_input_virtualInput, clock = ms) so
--- the whole connection lifecycle is unit-testable.
+-- Dependencies are injected (input = core_input_virtualInput, clock = ms,
+-- vehicle = what the watchdog needs of the cars) so the whole connection
+-- lifecycle is unit-testable.
 
 local protocol = require('/lua/ge/extensions/beamRemotePlus/protocol')
 
@@ -20,7 +21,14 @@ M.AXIS_BRAKE = 2
 M.BUTTON_SHIFT_UP = 0
 M.BUTTON_SHIFT_DOWN = 1
 
-function M.new(input, clock)
+--[[
+vehicle (optional, for the watchdog):
+  motion(client) -> { speed = m/s, reverse = bool, arcade = bool } of the car
+                    the phone drives, or nil when unknown
+  setHandbrake(client, on)  holds or releases the handbrake of that car
+]]
+function M.new(input, clock, vehicle)
+  vehicle = vehicle or {}
   local self = {}
   local clients = {}
 
@@ -84,7 +92,8 @@ function M.new(input, clock)
       forceEmit = true, -- first control packet always emits every axis
       lastSeen = clock(),
       lastControl = clock(), -- watchdog, see self.watchdog
-      stoppingSince = nil, -- ms: the car brakes because the phone went silent or left
+      stoppingSince = nil, -- ms: the car is being stopped: the phone went silent or left
+      handbrakeSet = nil, -- the watchdog pulled the handbrake of the stopped car
       leaving = false,  -- the player left: disconnected once the car stopped
     }
     clients[ip] = client
@@ -153,29 +162,34 @@ function M.new(input, clock)
   end
 
   -- A phone that left keeps braking until the watchdog disconnects it;
-  -- a phone back after a silence drives again at once.
+  -- a phone back after a silence drives again at once (and the handbrake
+  -- the watchdog pulled is released).
   function self.applyControl(client, steering, throttle, brake)
     if client.leaving then return end
     local values = { protocol.clampUnit(steering), protocol.clampUnit(throttle), protocol.clampUnit(brake) }
     local force = client.forceEmit or client.stoppingSince ~= nil
     client.forceEmit = false
+    if client.handbrakeSet and vehicle.setHandbrake then pcall(vehicle.setHandbrake, client, false) end
     client.stoppingSince = nil
+    client.handbrakeSet = nil
     emitAxes(client, values, force)
     client.lastSeen = clock()
     client.lastControl = clock()
   end
 
-  -- Starts braking the car of a driving phone (see protocol.SIGNAL_LOST_MS).
+  -- Starts stopping the car of a driving phone (see protocol.SIGNAL_LOST_MS).
   local function startStopping(client, now, onRelease)
     client.stoppingSince = now
+    client.handbrakeSet = nil
     for name in pairs(client.holds) do
       if onRelease then pcall(onRelease, client, name) end
     end
     client.holds = {}
-    emitAxes(client, { 0.5, 0, protocol.STOP_BRAKE }, true)
+    emitAxes(client, { 0.5, 0, 0 }, true)
   end
 
-  -- The player left on purpose: same braking, then disconnected.
+  -- The player left on purpose: the car is stopped the same way, then the
+  -- phone is disconnected.
   function self.leave(ip, onRelease)
     local client = clients[ip]
     if not client then return nil end
@@ -185,22 +199,44 @@ function M.new(input, clock)
     return client
   end
 
+  -- One frame of stopping a car. Moving: brake for STOP_DURATION_MS with the
+  -- pedal that slows it (in arcade mode, reversing swaps the pedals: the
+  -- throttle brakes). Stopped: pedals released and the handbrake pulled, so
+  -- an arcade gearbox never takes the brake for "reverse". Returns true once
+  -- the car is held by the handbrake (or its motion is unknown and the
+  -- braking time is over).
+  local function stopStep(client, now)
+    local motion = vehicle.motion and vehicle.motion(client)
+    local braking = now - client.stoppingSince < protocol.STOP_DURATION_MS
+    if motion and (tonumber(motion.speed) or 0) <= protocol.STOPPED_SPEED then
+      emitAxes(client, { 0.5, 0, 0 }, false)
+      if not client.handbrakeSet then
+        client.handbrakeSet = true
+        if vehicle.setHandbrake then pcall(vehicle.setHandbrake, client, true) end
+      end
+      return true
+    end
+    if motion and braking then
+      local pedal = motion.reverse and motion.arcade and 2 or 3
+      emitAxes(client, { 0.5, pedal == 2 and protocol.STOP_BRAKE or 0, pedal == 3 and protocol.STOP_BRAKE or 0 }, false)
+      return false
+    end
+    emitAxes(client, { 0.5, 0, 0 }, false)
+    return motion == nil and not braking
+  end
+
   -- Per-frame safety of the driving phones. Returns the clients whose car
-  -- started braking (signal lost) and those who left and are now gone.
+  -- started stopping (signal lost) and those who left and are now gone.
   function self.watchdog(now, onRelease)
     local lost, gone = {}, {}
     self.each(function(ip, client)
       if client.display or not client.deviceInst then return end
-      local since = client.stoppingSince
-      if since == nil then
-        if protocol.isSignalLost(now, client.lastControl) then
-          startStopping(client, now, onRelease)
-          lost[#lost + 1] = client
-        end
-      elseif now - since >= protocol.STOP_DURATION_MS and client.state[3] ~= 0 then
-        emitAxes(client, { 0.5, 0, 0 }, false)
-        if client.leaving then gone[#gone + 1] = self.disconnect(ip, onRelease) end
+      if client.stoppingSince == nil then
+        if not protocol.isSignalLost(now, client.lastControl) then return end
+        startStopping(client, now, onRelease)
+        lost[#lost + 1] = client
       end
+      if stopStep(client, now) and client.leaving then gone[#gone + 1] = self.disconnect(ip, onRelease) end
     end)
     return lost, gone
   end

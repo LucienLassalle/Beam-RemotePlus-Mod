@@ -55,11 +55,13 @@ M.CLIENT_TIMEOUT_MS = 10000
 
 -- Watchdog: a driving phone silent for SIGNAL_LOST_MS (Wi-Fi drop, app
 -- killed...), or leaving on purpose, no longer accelerates: its car brakes
--- at STOP_BRAKE with the wheel centred for STOP_DURATION_MS, then the
--- brake is released.
+-- at STOP_BRAKE with the wheel centred for up to STOP_DURATION_MS, and as
+-- soon as it is below STOPPED_SPEED the pedals are released and the
+-- handbrake holds it (an arcade gearbox would reverse on the brake).
 M.SIGNAL_LOST_MS = 1000
 M.STOP_BRAKE = 0.6
 M.STOP_DURATION_MS = 5000
+M.STOPPED_SPEED = 0.5 -- m/s
 M.TELEMETRY_INTERVAL_MS = 33 -- ~30 Hz
 M.HEARTBEAT_INTERVAL_MS = 5000
 
