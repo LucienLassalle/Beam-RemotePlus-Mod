@@ -114,7 +114,9 @@ const { api } = useBridge()
 const events = useEvents()
 
 const state = ref({ listening: false, locked: false, debug: false, phones: [], version: "" })
-const phones = computed(() => state.value.phones || [])
+// An empty Lua table reaches the UI as {} instead of []: always a list here.
+const asList = value => (Array.isArray(value) ? value : Object.values(value || {}))
+const phones = computed(() => asList(state.value.phones))
 
 // Live status of each phone (server.lua): a disconnected phone stays listed,
 // greyed out, for 30 seconds. Older Lua sides send no status.
@@ -130,7 +132,7 @@ const activeCount = computed(() => phones.value.filter(phone => status(phone) !=
 // installed but disabled, or missing (optionalMods.lua), in their own tab
 // next to the phones.
 const showMods = ref(false)
-const optionalMods = computed(() => state.value.optionalMods || [])
+const optionalMods = computed(() => asList(state.value.optionalMods))
 const enabledCount = computed(() => optionalMods.value.filter(mod => mod.state === "enabled").length)
 const STATE_TEXTS = {
   enabled: "beamRemotePlus.app.modEnabled",
@@ -179,7 +181,7 @@ async function confirmKick(phone) {
 
 onMounted(() => {
   events.on("BeamRemotePlusState", newState => {
-    if (newState) state.value = { ...newState, phones: newState.phones || [] }
+    if (newState) state.value = newState
   })
   callMod("requestState")
 })
