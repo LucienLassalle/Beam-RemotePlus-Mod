@@ -10,12 +10,17 @@
 --   hold : "cmd|horn|1" on press, "cmd|horn|0" on release; held commands are
 --          released automatically when the phone disconnects.
 
+local vehicleActions = require('/lua/ge/extensions/beamRemotePlus/vehicleActions')
+
 local M = {}
 
 M.ERR_UNKNOWN = 'unknown_command'
 M.ERR_NO_VEHICLE = 'no_vehicle'
 M.ERR_BAD_ARGUMENT = 'bad_argument'
 M.ERR_UNAVAILABLE = 'unavailable'
+
+-- Key in client.holds of a "More" command held down (action_down).
+M.ACTION_HOLD_PREFIX = 'action:'
 
 M.HOLD_ACTIONS = {
   horn = { on = 'electrics.horn(true)', off = 'electrics.horn(false)' },
@@ -90,6 +95,8 @@ deps:
   cycleCamera(player, offset) -> ok, err
   pulseButton(client, button)
   buttons = { shiftUp = n, shiftDown = n }
+  requestActions(client) -> ok, err      lists the "More" commands (answered later)
+  runVehicleAction(client, name, value) -> ok, err   a vehicle's own action
 ]]
 function M.new(deps)
   local self = {}
@@ -117,6 +124,7 @@ function M.new(deps)
     gear_up = function(client) deps.pulseButton(client, deps.buttons.shiftUp) return true end,
     gear_down = function(client) deps.pulseButton(client, deps.buttons.shiftDown) return true end,
     skeleton = function(client) return runOnVehicle(client, M.SKELETON_REQUEST) end,
+    actions = function(client) return deps.requestActions(client) end,
     debug = function(client, arg)
       local on = M.parseHoldArg(arg)
       if on == nil then return false, M.ERR_BAD_ARGUMENT end
@@ -124,6 +132,37 @@ function M.new(deps)
       return true
     end,
   }
+
+  -- Commands of the "More" sheet (vehicleActions.lua), value 1 = pressed,
+  -- 0 = released.
+  local function runAction(client, id, value)
+    if type(id) ~= 'string' then return false, M.ERR_BAD_ARGUMENT end
+    local generic = id:match('^' .. vehicleActions.GENERIC_PREFIX .. '(.+)$')
+    if generic then
+      local code = vehicleActions.GENERIC[generic]
+      if not code then return false, M.ERR_UNKNOWN end
+      if value == 0 then return true end
+      return runOnVehicle(client, code)
+    end
+    local name = id:match('^' .. vehicleActions.VEHICLE_PREFIX .. '(.+)$')
+    if not name then return false, M.ERR_BAD_ARGUMENT end
+    return deps.runVehicleAction(client, name, value)
+  end
+
+  special.action = function(client, id)
+    local ok, err = runAction(client, id, 1)
+    if ok then runAction(client, id, 0) end
+    return ok, err
+  end
+  special.action_down = function(client, id)
+    local ok, err = runAction(client, id, 1)
+    if ok then client.holds[M.ACTION_HOLD_PREFIX .. id] = true end
+    return ok, err
+  end
+  special.action_up = function(client, id)
+    client.holds[M.ACTION_HOLD_PREFIX .. tostring(id)] = nil
+    return runAction(client, id, 0)
+  end
 
   -- Returns ok, error, canonicalName.
   function self.execute(client, name, arg)
@@ -155,6 +194,10 @@ function M.new(deps)
 
   -- Used on disconnect: releases a still-active hold command.
   function self.release(client, name)
+    if name:sub(1, #M.ACTION_HOLD_PREFIX) == M.ACTION_HOLD_PREFIX then
+      runAction(client, name:sub(#M.ACTION_HOLD_PREFIX + 1), 0)
+      return
+    end
     local hold = M.HOLD_ACTIONS[name]
     if hold then runOnVehicle(client, hold.off) end
   end

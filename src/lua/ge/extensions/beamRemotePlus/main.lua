@@ -6,7 +6,7 @@
 
 local MODULE_DIR = '/lua/ge/extensions/beamRemotePlus/'
 local SIBLINGS = { 'json', 'protocol', 'config', 'i18n', 'logger', 'clients',
-  'commands', 'radar', 'telemetry', 'transport', 'nativeRemote', 'version', 'optionalMods', 'server' }
+  'vehicleActions', 'commands', 'radar', 'telemetry', 'transport', 'nativeRemote', 'version', 'optionalMods', 'server' }
 
 -- require() caches by path independently of extensions.reload(): without
 -- this, reloading the mod would keep running stale sibling modules.
@@ -19,6 +19,7 @@ local transportModule = require(MODULE_DIR .. 'transport')
 local nativeRemoteModule = require(MODULE_DIR .. 'nativeRemote')
 local serverModule = require(MODULE_DIR .. 'server')
 local radar = require(MODULE_DIR .. 'radar')
+local vehicleActions = require(MODULE_DIR .. 'vehicleActions')
 
 local M = {}
 
@@ -105,6 +106,24 @@ local function cycleCamera(player, offset)
   return true
 end
 
+-- The vehicle's own actions, as the game lists them in Options > Controls.
+local function listVehicleActions(model)
+  local actions = extensions.core_input_actions
+  if not (actions and actions.getActiveActions) then return {} end
+  return vehicleActions.vehicleEntries(actions.getActiveActions(), model, type(_tr) == 'function' and _tr or nil)
+end
+
+-- Runs one of them on the vehicle like its key binding would (value 1 =
+-- pressed, 0 = released).
+local function runVehicleAction(vehicle, name, value)
+  local actions = extensions.core_input_actions
+  if not (actions and actions.getActiveActions and actions.executeCommand) then return false, 'unavailable:input_actions' end
+  local action = actions.getActiveActions()[actions.nameToUniqueName(name, vehicle:getJBeamFilename())]
+  if not action then return false, 'unknown_command' end
+  actions.executeCommand(action, value, vehicle:getID())
+  return true
+end
+
 local function createServer()
   local config = configModule.new({ readJson = jsonReadFile, writeJson = jsonWriteFile })
   config.load()
@@ -126,6 +145,8 @@ local function createServer()
     listVehicles = listVehicles,
     switchVehicle = switchVehicle,
     cycleCamera = cycleCamera,
+    listVehicleActions = listVehicleActions,
+    runVehicleAction = runVehicleAction,
     onDeviceCreated = function()
       if core_input_bindings and core_input_bindings.onDeviceChanged then core_input_bindings.onDeviceChanged() end
     end,
@@ -179,6 +200,13 @@ local function onTelemetry(vehicleId, snapshot)
   if not ok then logger.throttled('telemetry', 3000, 'W', 'telemetry dropped: ' .. tostring(err)) end
 end
 
+-- Called from the vehicle VM when a phone asked for the "More" commands.
+local function onVehicleFeatures(vehicleId, ids)
+  if not server then return end
+  local ok, err = pcall(server.onVehicleFeatures, vehicleId, ids)
+  if not ok then logger.warn('vehicle commands dropped: ' .. tostring(err)) end
+end
+
 -- Called from the vehicle VM when a phone asked for the skeleton geometry.
 local function onSkeleton(vehicleId, skeleton)
   if not server then return end
@@ -205,6 +233,7 @@ M.onModDeactivated = onModsChanged
 M.onModManagerStateChanged = onModsChanged
 M.onTelemetry = onTelemetry
 M.onSkeleton = onSkeleton
+M.onVehicleFeatures = onVehicleFeatures
 M.setDebug = setDebug
 M.toggleDebug = toggleDebug
 M.setLocked = setLocked

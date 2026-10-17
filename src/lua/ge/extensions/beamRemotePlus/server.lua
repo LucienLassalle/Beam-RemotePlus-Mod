@@ -8,6 +8,7 @@ local commandsModule = require('/lua/ge/extensions/beamRemotePlus/commands')
 local telemetryModule = require('/lua/ge/extensions/beamRemotePlus/telemetry')
 local optionalModsModule = require('/lua/ge/extensions/beamRemotePlus/optionalMods')
 local versionModule = require('/lua/ge/extensions/beamRemotePlus/version')
+local vehicleActions = require('/lua/ge/extensions/beamRemotePlus/vehicleActions')
 
 local M = {}
 
@@ -34,6 +35,10 @@ function M.motionOf(t)
   }
 end
 
+-- Asks the vehicle VM which generic commands the vehicle is fitted for
+-- (answered through extensions.beamRemotePlus_main.onVehicleFeatures).
+M.FEATURES_REQUEST = 'local e = extensions.beamRemotePlus_telemetry if e and e.sendFeatures then e.sendFeatures() end'
+
 --[[
 deps:
   transport   { open(port) -> ok, err ; close() ; receive() -> data, ip ; send(payload, ip, port) }
@@ -57,6 +62,8 @@ deps:
   fileExists(path)            optional, file in the game's virtual file system
   nativeRemote                optional nativeRemote.new(...) instance: the
                               game's own remote control (UDP 4444)
+  listVehicleActions(model)   optional, the vehicle's own actions (vehicleActions.vehicleEntries)
+  runVehicleAction(vehicle, name, value)  optional, runs one of them -> ok, err
 ]]
 function M.new(deps)
   local self = {}
@@ -92,12 +99,38 @@ function M.new(deps)
     deps.transport.send(payload, client.ip, protocol.CLIENT_PORT)
   end
 
+  -- Phones waiting for the "More" commands of a vehicle: [vehicleId] =
+  -- { model, ips = { [ip] = true } }, answered by onVehicleFeatures.
+  local pendingActions = {}
+
+  local function requestActions(client)
+    if client.version < 2 then return false, commandsModule.ERR_UNAVAILABLE end
+    local vehicle = deps.getVehicle(client.player or 0)
+    if not vehicle then return false, commandsModule.ERR_NO_VEHICLE end
+    local id = vehicle:getID()
+    local pending = pendingActions[id] or { ips = {} }
+    pending.model = vehicle.getJBeamFilename and vehicle:getJBeamFilename() or nil
+    pending.ips[client.ip] = true
+    pendingActions[id] = pending
+    vehicle:queueLuaCommand(M.FEATURES_REQUEST)
+    return true
+  end
+
+  local function runVehicleAction(client, name, value)
+    local vehicle = deps.getVehicle(client.player or 0)
+    if not vehicle then return false, commandsModule.ERR_NO_VEHICLE end
+    if not deps.runVehicleAction then return false, commandsModule.ERR_UNAVAILABLE end
+    return deps.runVehicleAction(vehicle, name, value)
+  end
+
   local commands = commandsModule.new({
     getVehicle = deps.getVehicle,
     switchVehicle = deps.switchVehicle,
     cycleCamera = deps.cycleCamera,
     pulseButton = function(client, button) clients.pulseButton(client, button) end,
     buttons = { shiftUp = clientsModule.BUTTON_SHIFT_UP, shiftDown = clientsModule.BUTTON_SHIFT_DOWN },
+    requestActions = requestActions,
+    runVehicleAction = runVehicleAction,
   })
 
   local telemetry = telemetryModule.new({
@@ -409,6 +442,29 @@ function M.new(deps)
 
   function self.onSkeleton(vehicleId, s)
     return telemetry.dispatchSkeleton(clients, vehicleId, s)
+  end
+
+  -- Answer of the vehicle VM to FEATURES_REQUEST: the phones waiting get
+  -- the generic commands found, then the vehicle's own ones. Returns the
+  -- number of phones answered.
+  function self.onVehicleFeatures(vehicleId, ids)
+    local pending = pendingActions[vehicleId]
+    pendingActions[vehicleId] = nil
+    if not pending then return 0 end
+    local entries = vehicleActions.genericEntries(ids)
+    if pending.model and deps.listVehicleActions then
+      for _, entry in ipairs(deps.listVehicleActions(pending.model) or {}) do entries[#entries + 1] = entry end
+    end
+    local message = protocol.buildActionsMessage(pending.model, entries)
+    local sent = 0
+    for ip in pairs(pending.ips) do
+      local client = clients.get(ip)
+      if client then
+        send(client, message)
+        sent = sent + 1
+      end
+    end
+    return sent
   end
 
   -- Per-frame work ----------------------------------------------------------

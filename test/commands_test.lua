@@ -12,6 +12,11 @@ local function setup(opts)
     cycleCamera = function(player, offset) calls.camera = offset return true end,
     pulseButton = function(_, button) calls.button = button end,
     buttons = { shiftUp = 0, shiftDown = 1 },
+    requestActions = function() calls.requested = true return true end,
+    runVehicleAction = function(_, name, value)
+      calls.vehicleAction = (calls.vehicleAction or '') .. name .. '=' .. value .. ';'
+      return true
+    end,
   })
   local client = { player = 1, holds = {}, debug = false }
   return commands, client, vehicle, calls
@@ -194,5 +199,43 @@ t.describe('commands: pit limiter of vehicle mods', function()
     local values = {}
     runOnVehicle(vehicle.commands[1], { electrics = { values = values } })
     t.assertEquals(values.pitLimiter, 1)
+  end)
+end)
+
+t.describe('commands: "More" sheet', function()
+  t.it('asks for the commands of the vehicle', function()
+    local commands, client, _, calls = setup()
+    t.assertTrue(commands.execute(client, 'actions'))
+    t.assertTrue(calls.requested)
+  end)
+  t.it('runs a generic command with the game code', function()
+    local commands, client, vehicle = setup()
+    t.assertTrue(commands.execute(client, 'action', 'g:four_wd'))
+    t.assertContains(vehicle.commands[1], 'toggle4WD()')
+    t.assertEquals(#vehicle.commands, 1)
+  end)
+  t.it('presses and releases a vehicle action', function()
+    local commands, client, _, calls = setup()
+    t.assertTrue(commands.execute(client, 'action', 'v:toggle_tailgate'))
+    t.assertEquals(calls.vehicleAction, 'toggle_tailgate=1;toggle_tailgate=0;')
+  end)
+  t.it('holds a vehicle action and releases it on disconnect', function()
+    local commands, client, _, calls = setup()
+    t.assertTrue(commands.execute(client, 'action_down', 'v:crane'))
+    t.assertTrue(client.holds['action:v:crane'])
+    for name in pairs(client.holds) do commands.release(client, name) end
+    t.assertEquals(calls.vehicleAction, 'crane=1;crane=0;')
+  end)
+  t.it('forgets a hold once released', function()
+    local commands, client = setup()
+    commands.execute(client, 'action_down', 'v:crane')
+    t.assertTrue(commands.execute(client, 'action_up', 'v:crane'))
+    t.assertNil(client.holds['action:v:crane'])
+  end)
+  t.it('rejects unknown or malformed ids', function()
+    local commands, client = setup()
+    t.assertFalse(commands.execute(client, 'action', 'g:warp_drive'))
+    t.assertFalse(commands.execute(client, 'action', 'tailgate'))
+    t.assertFalse(commands.execute(client, 'action'))
   end)
 end)
