@@ -45,6 +45,7 @@ local function setup(opts)
     getSecurityCode = function() if opts.noCode then return nil end return CODE end,
     getHostLabel = function() return "Test's PC" end,
     getHostAddress = function() return '192.168.1.20' end,
+    playerColor = function(player) return ({ '#f21a1a', '#2673ff' })[player + 1] end,
     getVehicle = function() return env.vehicle end,
     switchVehicle = function() return true end,
     cycleCamera = function() return true end,
@@ -568,5 +569,28 @@ t.describe('server: pairing QR code', function()
     local env = setup({ noCode = true })
     env.server.update()
     t.assertNil(env.server.state().pairingUri)
+  end)
+end)
+
+t.describe('server: player colours', function()
+  t.it('gives the panel and the phone the colour the game gives the player', function()
+    local env = setup()
+    connect(env)
+    local client = env.server.clients.get('10.0.0.2')
+    env.server.onInputBindingsChanged({ ['vinput' .. client.deviceInst] = 1 })
+    t.assertEquals(env.states[#env.states].phones[1].color, '#2673ff')
+    local session
+    for _, s in ipairs(env.transport.sent) do if s.payload:find('"type":"session"', 1, true) then session = s.payload end end
+    t.assertContains(session, '"playerColor":"#2673ff"')
+  end)
+  t.it('has no colour while unassigned or for a second screen', function()
+    local env = setup()
+    connect(env)
+    t.assertNil(env.server.state().phones[1].color)
+    env.transport.push(protocol.buildPingMessage(CODE, 2, 'Tab', 'display'), '10.0.0.7')
+    env.server.update()
+    for _, phone in ipairs(env.server.state().phones) do
+      if phone.display then t.assertNil(phone.color) end
+    end
   end)
 end)

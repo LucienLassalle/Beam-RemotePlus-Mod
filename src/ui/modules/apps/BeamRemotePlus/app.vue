@@ -208,12 +208,10 @@ function callMod(fn, ...args) {
 const setLocked = value => callMod("setLocked", !!value)
 const setDebug = value => callMod("setDebug", !!value)
 
-// Same colours as the app shows for each player (blue, red, green, yellow),
-// so everyone knows which phone drives which car. None for a second screen
-// or an unassigned phone.
-const PLAYER_COLORS = ["#3B82F6", "#EF4444", "#22C55E", "#EAB308"]
-const playerColor = phone =>
-  phone.display || phone.player === undefined || phone.player === null ? "transparent" : PLAYER_COLORS[phone.player % PLAYER_COLORS.length]
+// Colour the game gives the player of each phone (its multiseat name tag,
+// server.lua), also shown by the app: everyone knows which phone drives
+// which car. None for a second screen or an unassigned phone.
+const playerColor = phone => phone.color || "transparent"
 
 // BeamNG players are 0-based; a phone is unassigned for a moment after pairing.
 const playerNumber = phone => (phone.player === undefined || phone.player === null ? "?" : phone.player + 1)

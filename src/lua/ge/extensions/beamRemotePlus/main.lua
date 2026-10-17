@@ -64,6 +64,17 @@ local function getHostAddress()
   return ok and address or nil
 end
 
+-- Colour of a player (0-based), the same as the game's multiseat name tags
+-- above the cars (render/playerTags.lua): red, blue, yellow, green...
+local function playerColor(player)
+  local ok, tags = pcall(require, 'ge/extensions/render/playerTags')
+  if not ok or type(tags) ~= 'table' or type(tags.color) ~= 'function' then return nil end
+  local rgb = tags.color(player + 1, math.max(player + 1, 1))
+  if type(rgb) ~= 'table' then return nil end
+  local function chan(x) return math.max(0, math.min(255, math.floor((tonumber(x) or 0) * 255 + 0.5))) end
+  return string.format('#%02x%02x%02x', chan(rgb[1]), chan(rgb[2]), chan(rgb[3]))
+end
+
 local function getVehicle(player)
   if type(getPlayerVehicle) ~= 'function' then return nil end
   return getPlayerVehicle(player)
@@ -110,6 +121,7 @@ local function createServer()
     nativeRemote = nativeRemote,
     getHostLabel = getHostLabel,
     getHostAddress = getHostAddress,
+    playerColor = playerColor,
     getVehicle = getVehicle,
     listVehicles = listVehicles,
     switchVehicle = switchVehicle,
