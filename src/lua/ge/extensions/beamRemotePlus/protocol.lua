@@ -328,6 +328,15 @@ function M.buildSessionMessage(info)
   return json.encode(msg)
 end
 
+-- Answer to cmd|actions: the commands of the "More" sheet for the vehicle
+-- the phone drives ({ id, kind = 'press'|'hold', title? }, see
+-- vehicleActions.lua), always a JSON array, even empty.
+function M.buildActionsMessage(vehicle, actions)
+  local list = setmetatable({}, { __jsonArray = true })
+  for i, entry in ipairs(type(actions) == 'table' and actions or {}) do list[i] = entry end
+  return json.encode({ type = 'actions', vehicle = vehicle, actions = list })
+end
+
 -- Sent to a phone the player kicked, right before its session is closed.
 function M.buildKickedMessage()
   return json.encode({ type = 'kicked' })

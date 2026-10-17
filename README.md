@@ -30,6 +30,10 @@ longer maintained.
   parking brake, ignition, drive mode, gearbox mode, cruise control, gears,
   recovery, vehicle and camera switching, and on police cars, ambulances,
   fire trucks and pace cars the emergency lights and siren.
+- Every other command of the vehicle for the phone's **More** sheet: fog
+  lights, 4WD, low range, differential lock, launch control, nitrous,
+  trailer coupler... and the vehicle's own actions (tailgate, crane,
+  vehicle mods), as listed in Options > Controls.
 - In-game panel: connected players, lock out new phones, kick a phone.
 - Second-screen phones (display only) and local multiplayer (one phone per
   player).
