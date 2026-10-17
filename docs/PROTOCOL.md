@@ -111,6 +111,9 @@ cmd|<name>|1 / |0     hold commands (pressed / released)
 | `debug` | hold | `1` = acknowledge every command, `0` = errors only |
 | `skeleton` | press | sends the skeleton of the vehicle (`skeleton` messages below) |
 | `leave` | press | the player disconnects on purpose: the car is stopped like after a lost signal (watchdog above), then the phone is disconnected once the handbrake holds it (a second screen at once); never acknowledged |
+| `actions` | press | lists the commands of the "More" sheet for the vehicle (`actions` message below) |
+| `action\|<id>` | press | runs one of them (pressed then released) |
+| `action_down\|<id>`, `action_up\|<id>` | press | holds one of them down, releases it (released by the mod when the phone disconnects or loses the signal) |
 
 Version 1 aliases: `recover_start` = `recover|1`, `recover_stop` = `recover|0`.
 
@@ -236,6 +239,24 @@ phone may pair again later, unless new phones are locked out.
 ```json
 {"type":"kicked"}
 ```
+
+**`actions`**: answer to `cmd|actions`, the commands of the vehicle the
+phone drives, beyond the dashboard buttons:
+
+```json
+{"type":"actions","vehicle":"pickup","actions":[
+  {"id":"g:four_wd","kind":"press"},
+  {"id":"v:toggle_tailgate","kind":"press","title":"Toggle tailgate"}]}
+```
+
+- `g:<id>`: a generic command of the game the vehicle is fitted for, in
+  this order: `fog_lights`, `four_wd`, `range` (low range), `diff_lock`,
+  `two_step`, `transbrake`, `line_lock`, `nitrous`, `lightbar_mode`,
+  `couplers` (trailer). No title: the app translates the id.
+- `v:<name>`: an action the vehicle declares itself, like its key
+  binding in Options > Controls, with its `title` in the game language.
+- `kind`: `press` (send `action`) or `hold` (send `action_down`, then
+  `action_up` on release).
 
 ### Version 1: binary telemetry (36 bytes)
 
