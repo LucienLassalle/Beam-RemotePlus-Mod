@@ -224,6 +224,10 @@ manager) or `missing`. Ids: `tyreThermals` (Tyre Thermals and Wear by Luuk,
 or its continuation Tyre Wear and Thermals Redux), `f4` (Carbonworks F4),
 `cf26`, `fr17`. Unknown ids must be ignored.
 
+`playerColor` (not sent by older mods, nor to a second screen or an
+unassigned phone): `#rrggbb` colour the game gives the player, the one of
+its name tag above the car in local multiplayer.
+
 **`kicked`**: the player removed this phone from the in-game panel. The
 session is already closed on the mod side: the app must stop pinging (it
 would reconnect at once otherwise) and go back to its pairing screen. The
