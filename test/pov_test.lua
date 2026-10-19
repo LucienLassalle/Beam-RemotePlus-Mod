@@ -175,3 +175,21 @@ t.describe('pov: lifecycle', function()
     t.assertEquals(env.views[1].cycled, -1)
   end)
 end)
+
+t.describe('pov: cameras of the video', function()
+  local order = { 'orbit', 'driver', 'occupant.FL', 'occupant.FR', 'onboard.hood', 'crash' }
+  local cycle = povModule.cycleWithSeat
+  t.it('puts the driver seat back in the cycle of the game', function()
+    t.assertEquals(cycle(order, 'orbit', 'onboard.hood', 'occupant.FL', 1), 'occupant.FL')
+    t.assertEquals(cycle(order, 'onboard.hood', 'orbit', 'occupant.FL', -1), 'occupant.FL')
+  end)
+  t.it('leaves the seat for the next camera, and keeps the rest of the cycle', function()
+    t.assertEquals(cycle(order, 'occupant.FL', 'onboard.hood', 'occupant.FL', 1), 'onboard.hood')
+    t.assertEquals(cycle(order, 'onboard.hood', 'crash', 'occupant.FL', 1), 'crash')
+    t.assertEquals(cycle(order, 'crash', 'orbit', 'occupant.FL', 1), 'orbit')
+  end)
+  t.it('goes to the seat when the game does not move', function()
+    t.assertEquals(cycle(order, 'orbit', 'orbit', 'occupant.FL', 1), 'occupant.FL')
+  end)
+end)
+

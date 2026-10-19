@@ -20,6 +20,7 @@ local nativeRemoteModule = require(MODULE_DIR .. 'nativeRemote')
 local serverModule = require(MODULE_DIR .. 'server')
 local radar = require(MODULE_DIR .. 'radar')
 local vehicleActions = require(MODULE_DIR .. 'vehicleActions')
+local povModule = require(MODULE_DIR .. 'pov')
 
 local M = {}
 
@@ -221,8 +222,16 @@ local povViews = {
     return readFile(view.file), isInsideCamera(view.camera)
   end,
   cycleCamera = function(view, offset)
+    local current = povCameraName(view)
     core_camera.setVehicleCameraByIndexOffset(view.input, offset)
-    view.camera = povCameraName(view) or view.camera
+    local order = {}
+    for _, config in ipairs(core_camera.getConfigurationReadOnly()) do
+      if config.enabled or config.name == 'driver' or config.name:find('^occupant%.') then order[#order + 1] = config.name end
+    end
+    local seat = view.vid and core_camera.getDriverCameraNameById(view.vid)
+    local camera = povModule.cycleWithSeat(order, current, povCameraName(view), seat, offset)
+    if camera and camera ~= povCameraName(view) then core_camera.setContextCamera(view.id, camera) end
+    view.camera = camera or view.camera
     return true
   end,
 }

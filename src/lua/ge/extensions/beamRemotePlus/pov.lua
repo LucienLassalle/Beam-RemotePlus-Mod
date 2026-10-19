@@ -42,6 +42,25 @@ function M.header(frame, part, parts, flags)
     part or 0, parts or 1, flags or 0)
 end
 
+-- The game cycles the cameras of a hidden view without the seat cameras
+-- (they belong to the player seated in the car, not to the view's own input
+-- player): puts the driver's seat back in the cycle. order: the camera names
+-- in the game's order, current / nextName: the camera before and after the
+-- game's cycle, seat: the driver's seat camera. Returns the camera to show.
+function M.cycleWithSeat(order, current, nextName, seat, offset)
+  local index = {}
+  for i, name in ipairs(order) do index[name] = i end
+  local n, c, x, s = #order, index[current], index[nextName], index[seat]
+  if not (c and s) or current == seat then return nextName end
+  local function dist(from, to)
+    local d = offset > 0 and to - from or from - to
+    return d % n
+  end
+  local toSeat, toNext = dist(c, s), x and dist(c, x) or 0
+  if toNext == 0 or toSeat < toNext then return seat end
+  return nextName
+end
+
 --[[
 deps:
   createView(id, player, width, height) -> view, or nil, err
