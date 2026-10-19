@@ -45,11 +45,17 @@ local function setup(opts)
     getSecurityCode = function() if opts.noCode then return nil end return CODE end,
     getHostLabel = function() return "Test's PC" end,
     getHostAddress = function() return '192.168.1.20' end,
-    playerColor = function(player) return ({ '#f21a1a', '#2673ff' })[player + 1] end,
+    playerColor = function(player) return (env.colors or { '#f21a1a', '#2673ff' })[player + 1] end,
     getVehicle = function() return env.vehicle end,
     switchVehicle = function() return true end,
     cycleCamera = function() return true end,
     onDeviceCreated = function() env.rescans = env.rescans + 1 end,
+    joinPlayer = function(client)
+      env.joins = (env.joins or 0) + 1
+      if opts.cannotJoin then return false, 'setup_open' end
+      env.server.onInputBindingsChanged({ ['vinput' .. client.deviceInst] = 1 })
+      return true
+    end,
     nativeRemote = env.native,
     getMods = function() return env.mods end,
     fileExists = function() return false end,
@@ -583,15 +589,76 @@ t.describe('server: player colours', function()
     for _, s in ipairs(env.transport.sent) do if s.payload:find('"type":"session"', 1, true) then session = s.payload end end
     t.assertContains(session, '"playerColor":"#2673ff"')
   end)
+  t.it('tells the phone when its player picks another colour', function()
+    local env = setup()
+    connect(env)
+    local client = env.server.clients.get('10.0.0.2')
+    env.server.onInputBindingsChanged({ ['vinput' .. client.deviceInst] = 0 })
+    local function sessions()
+      local n = 0
+      for _, s in ipairs(env.transport.sent) do if s.payload:find('"type":"session"', 1, true) then n = n + 1 end end
+      return n
+    end
+    local before = sessions()
+    env.server.onParticipantsChanged()
+    t.assertEquals(sessions(), before)
+    env.colors = { '#00ff00' }
+    env.server.onParticipantsChanged()
+    t.assertEquals(sessions(), before + 1)
+    t.assertContains(env.transport.sent[#env.transport.sent].payload, '"playerColor":"#00ff00"')
+  end)
   t.it('has no colour while unassigned or for a second screen', function()
     local env = setup()
     connect(env)
+    t.assertNil(env.server.state().phones[1].color)
+    -- Local multiplayer without a player for the phone yet (0.40).
+    env.server.onInputBindingsChanged({ ['vinput' .. env.server.clients.get('10.0.0.2').deviceInst] = -1 })
     t.assertNil(env.server.state().phones[1].color)
     env.transport.push(protocol.buildPingMessage(CODE, 2, 'Tab', 'display'), '10.0.0.7')
     env.server.update()
     for _, phone in ipairs(env.server.state().phones) do
       if phone.display then t.assertNil(phone.color) end
     end
+  end)
+end)
+
+t.describe('server: local players (0.40)', function()
+  t.it('joins a phone left without a player, on the next frame', function()
+    local env = setup()
+    connect(env)
+    local client = env.server.clients.get('10.0.0.2')
+    env.server.onInputBindingsChanged({ ['vinput' .. client.deviceInst] = -1 })
+    t.assertNil(env.joins)
+    env.server.update()
+    t.assertEquals(env.joins, 1)
+    t.assertEquals(client.player, 1)
+  end)
+  t.it('joins it only once: the player may take it out of the game', function()
+    local env = setup()
+    connect(env)
+    local client = env.server.clients.get('10.0.0.2')
+    env.server.onInputBindingsChanged({ ['vinput' .. client.deviceInst] = -1 })
+    env.server.update()
+    env.server.onInputBindingsChanged({ ['vinput' .. client.deviceInst] = -1 })
+    env.server.update()
+    t.assertEquals(env.joins, 1)
+  end)
+  t.it('tells the player when the phone cannot join', function()
+    local env = setup({ cannotJoin = true })
+    connect(env)
+    local client = env.server.clients.get('10.0.0.2')
+    env.server.onInputBindingsChanged({ ['vinput' .. client.deviceInst] = -1 })
+    env.server.update()
+    t.assertEquals(env.toasts[#env.toasts].kind, 'warning')
+    t.assertContains(env.toasts[#env.toasts].text, 'Pixel')
+  end)
+  t.it('leaves phones with a player alone', function()
+    local env = setup()
+    connect(env)
+    local client = env.server.clients.get('10.0.0.2')
+    env.server.onInputBindingsChanged({ ['vinput' .. client.deviceInst] = 0 })
+    env.server.update()
+    t.assertNil(env.joins)
   end)
 end)
 

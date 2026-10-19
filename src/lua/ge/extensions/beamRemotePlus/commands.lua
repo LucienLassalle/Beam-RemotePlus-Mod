@@ -28,9 +28,13 @@ M.HOLD_ACTIONS = {
   -- game has no automatic flashing, a flash is a short press).
   highbeam = { on = 'electrics.light_flash_highbeams(true)', off = 'electrics.light_flash_highbeams(false)' },
   starter = { on = 'electrics.toggleIgnitionLevelOnDown()', off = 'electrics.toggleIgnitionLevelOnUp()' },
-  -- Mirrors the native "Insert" key: short hold = small reposition, long
-  -- hold = rewind further back in the position history.
-  recover = { on = 'recovery.startRecovering()', off = 'recovery.stopRecovering()' },
+  -- Mirrors the native "Insert" key (recover_vehicle): short hold = small
+  -- reposition, long hold = rewind further back in the position history.
+  -- Since 0.40 the game tells the recovery which player let go of the key.
+  recover = {
+    on = "obj:queueGameEngineLua('extensions.hook(\"trackVehReset\", ' .. obj:getId() .. ')') recovery.startRecovering()",
+    off = 'recovery.stopRecovering(PLAYER)',
+  },
   -- Same as the "parking brake (hold)" input action: the handbrake only
   -- while held, for drifting.
   handbrake = { on = "input.event('parkingbrake', 1, -1)", off = "input.event('parkingbrake', 0, -1)" },
@@ -107,6 +111,8 @@ function M.new(deps)
   local function runOnVehicle(client, code)
     local vehicle = deps.getVehicle(client.player or 0)
     if not vehicle then return false, M.ERR_NO_VEHICLE end
+    -- PLAYER: the player of the phone, like in the game's input actions.
+    code = code:gsub('PLAYER', tostring(client.player or 0))
     vehicle:queueLuaCommand(M.wrapVehicleCode(code))
     return true
   end
