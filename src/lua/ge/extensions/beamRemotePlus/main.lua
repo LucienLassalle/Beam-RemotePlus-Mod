@@ -142,10 +142,11 @@ end
 -- player, starting from the driver's seat, never drawn on the PC screen. The
 -- context gets an input player of its own (POV_INPUT_PLAYER, counting down),
 -- so the player keeps its own camera on the PC, and the phone cycles the
--- cameras of its video through that input player.
+-- cameras of its video through that input player. The game's video
+-- streaming (libbngvs, 0.40) encodes the view on the graphics card and sends
+-- it to the phone.
 
 local POV_INPUT_PLAYER = 63
-local POV_DIR = '/temp/'
 local POV_CAMERA_CHECK_S = 1
 local povInputs = {} -- input players in use
 
@@ -172,12 +173,15 @@ local function povCameraName(view)
   return state and state.cam
 end
 
+-- Render views driven by camera contexts and the video streaming both
+-- arrived with 0.40.
+local function povAvailable()
+  return RenderViewManagerInstance ~= nil and core_camera ~= nil and core_camera.createContext ~= nil
+    and type(startNetworkOutput) == 'function'
+end
+
 local povViews = {
   createView = function(id, player, width, height)
-    -- Render views driven by camera contexts arrived with 0.40.
-    if not (RenderViewManagerInstance and core_camera and core_camera.createContext) then
-      return nil, 'unavailable:render_views'
-    end
     local input = POV_INPUT_PLAYER
     while povInputs[input] do input = input - 1 end
     local rv = RenderViewManagerInstance:getOrCreateView(id)
@@ -191,18 +195,27 @@ local povViews = {
     povQuality(rv)
     core_camera.createContext(id, id, input, player)
     povInputs[input] = true
-    return { id = id, rv = rv, input = input, player = player, file = POV_DIR .. id .. '.jpg', checkAt = 0 }
+    return { id = id, rv = rv, input = input, player = player, checkAt = 0 }
   end,
   destroyView = function(view)
     core_camera.destroyContext(view.id)
     RenderViewManagerInstance:destroyView(view.rv)
     povInputs[view.input] = nil
-    FS:removeFile(view.file)
   end,
-  setActive = function(view, on)
-    view.rv.active = on
+  startOutput = function(view, url, quality)
+    local q = povModule.QUALITIES[quality]
+    -- source, url, container, fps, bitrate, with audio (0 = no), encoder options
+    local id = startNetworkOutput(view.id, url, 'mpegts', q.fps, q.bitrate, 0, povModule.encoderOptions(quality))
+    if not id then return nil, 'no_output' end
+    return id
   end,
-  capture = function(view)
+  stopOutput = function(output)
+    stopNetworkOutput(output)
+  end,
+  outputStatus = function(output)
+    return getNetworkOutputStatus(output)
+  end,
+  update = function(view)
     -- The context starts on the car's default camera, and gets it back when
     -- the car changes: the camera of the video (the driver's seat of each
     -- new car) is selected again.
@@ -218,8 +231,7 @@ local povViews = {
       local current = view.camera and povCameraName(view)
       if current and current ~= view.camera then core_camera.setContextCamera(view.id, view.camera) end
     end
-    if not view.rv:saveToDisk(view.file) then return nil end
-    return readFile(view.file), isInsideCamera(view.camera)
+    return isInsideCamera(view.camera)
   end,
   cycleCamera = function(view, offset)
     local current = povCameraName(view)
@@ -260,7 +272,7 @@ local function createServer()
     cycleCamera = cycleCamera,
     listVehicleActions = listVehicleActions,
     runVehicleAction = runVehicleAction,
-    povViews = povViews,
+    povViews = povAvailable() and povViews or nil,
     onDeviceCreated = function()
       if core_input_bindings and core_input_bindings.onDeviceChanged then core_input_bindings.onDeviceChanged() end
     end,
@@ -289,12 +301,6 @@ local function onUpdate()
   if not server then return end
   local ok, err = pcall(server.update)
   if not ok then logger.throttled('update', 3000, 'E', 'update error (recovered): ' .. tostring(err)) end
-end
-
-local function onPreRender()
-  if not server then return end
-  local ok, err = pcall(server.onPreRender)
-  if not ok then logger.throttled('pov', 3000, 'E', 'point of view error (recovered): ' .. tostring(err)) end
 end
 
 local function onInputBindingsChanged(players)
@@ -353,7 +359,6 @@ end
 M.onExtensionLoaded = onExtensionLoaded
 M.onExtensionUnloaded = onExtensionUnloaded
 M.onUpdate = onUpdate
-M.onPreRender = onPreRender
 M.onInputBindingsChanged = onInputBindingsChanged
 M.onLocalParticipantsChanged = onLocalParticipantsChanged
 M.onModManagerReady = onModsChanged

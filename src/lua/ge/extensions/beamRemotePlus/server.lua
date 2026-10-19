@@ -66,7 +66,8 @@ deps:
   nativeRemote                optional nativeRemote.new(...) instance: the
                               game's own remote control (UDP 4444)
   listVehicleActions(model)   optional, the vehicle's own actions (vehicleActions.vehicleEntries)
-  povViews                    optional { createView, destroyView, setActive, capture, cycleCamera }: the
+  povViews                    optional { createView, destroyView, startOutput, stopOutput,
+                              outputStatus, update, cycleCamera }: the
                               game's hidden views for the point of view video (pov.lua)
   runVehicleAction(vehicle, name, value)  optional, runs one of them -> ok, err
 ]]
@@ -134,10 +135,12 @@ function M.new(deps)
   local pov = deps.povViews and povModule.new({
     createView = deps.povViews.createView,
     destroyView = deps.povViews.destroyView,
-    setActive = deps.povViews.setActive,
-    capture = deps.povViews.capture,
+    startOutput = deps.povViews.startOutput,
+    stopOutput = deps.povViews.stopOutput,
+    outputStatus = deps.povViews.outputStatus,
+    update = deps.povViews.update,
     cycleCamera = deps.povViews.cycleCamera,
-    send = function(payload, ip, port) deps.transport.send(payload, ip, port) end,
+    notify = function(ip, info) deps.transport.send(protocol.buildPovMessage(info), ip, protocol.CLIENT_PORT) end,
     clock = deps.clock,
   }) or nil
 
@@ -148,10 +151,13 @@ function M.new(deps)
       return true
     end
     quality = quality ~= true and quality or nil
-    local ok, err = pov.start(client, quality)
+    local ok, err, detail = pov.start(client, quality)
     if ok then
       log.info('point of view video for ' .. client.deviceName .. ' (player ' .. tostring(client.player) .. ', '
         .. (quality or povModule.DEFAULT_QUALITY) .. ')')
+    elseif err == povModule.ERR_ENCODER then
+      log.warn('no point of view video for ' .. client.deviceName .. ': the video encoder of the graphics card did not start ('
+        .. tostring(detail) .. '), see the videoStream lines of this log')
     end
     return ok, err
   end
@@ -593,17 +599,20 @@ function M.new(deps)
 
     telemetry.tick(clients)
 
+    if pov then
+      for ip, err in pairs(pov.tick(clients)) do
+        local client = clients.get(ip)
+        log.warn('point of view video stopped for ' .. (client and client.deviceName or ip) .. ': ' .. tostring(err)
+          .. (err == povModule.ERR_ENCODER and ', see the videoStream lines of this log' or ''))
+      end
+    end
+
     if now - lastHeartbeat > protocol.HEARTBEAT_INTERVAL_MS then
       lastHeartbeat = now
       log.debug('heartbeat: ' .. clients.count() .. ' phone(s) connected')
     end
   end
 
-  -- Point of view captures, just before the game renders its frame (measured
-  -- cheaper there than in onUpdate).
-  function self.onPreRender()
-    if pov then pov.tick(clients) end
-  end
 
   log.debugEnabled = deps.config.get('debug')
   return self

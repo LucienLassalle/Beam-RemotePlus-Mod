@@ -322,6 +322,12 @@ function M.buildAckMessage(command, ok, error)
   return json.encode({ type = 'ack', cmd = command, ok = ok and true or false, error = error })
 end
 
+-- State of the point of view video of a phone (pov.lua): state = starting,
+-- live or error, error = why there is none, inside = a seat camera.
+function M.buildPovMessage(info)
+  return json.encode({ type = 'pov', state = info.state, error = info.error, inside = info.inside, quality = info.quality })
+end
+
 function M.buildSessionMessage(info)
   local msg = { type = 'session' }
   for k, v in pairs(info) do msg[k] = v end

@@ -60,8 +60,14 @@ local function setup(opts)
     povViews = opts.pov and {
       createView = function(id, player, w) env.povWidth = w return { id = id, player = player } end,
       destroyView = function() env.povDestroyed = (env.povDestroyed or 0) + 1 end,
-      setActive = function() end,
-      capture = function() return 'JPEG', false end,
+      startOutput = function(_, url)
+        if opts.noEncoder then return nil, 'no_output' end
+        env.povUrl = url
+        return 1
+      end,
+      stopOutput = function() end,
+      outputStatus = function() return 0 end,
+      update = function() return true end,
       cycleCamera = function(_, offset) env.povCamera = offset return true end,
     } or nil,
     getMods = function() return env.mods end,
@@ -630,6 +636,13 @@ t.describe('server: player colours', function()
 end)
 
 t.describe('server: point of view video', function()
+  local function povMessages(env)
+    local list = {}
+    for _, s in ipairs(env.transport.sent) do
+      if s.payload:find('"type":"pov"', 1, true) then list[#list + 1] = s.payload end
+    end
+    return list
+  end
   t.it('streams the view of the phone player once asked, until it stops', function()
     local env = setup({ pov = true })
     connect(env)
@@ -637,11 +650,13 @@ t.describe('server: point of view video', function()
     env.server.onInputBindingsChanged({ ['vinput' .. client.deviceInst] = 0 })
     env.transport.push('cmd|pov|1', '10.0.0.2')
     env.server.update()
-    env.server.onPreRender() -- renders
-    env.server.onPreRender() -- captures
-    local frames = 0
-    for _, s in ipairs(env.transport.sent) do if s.port == 4448 then frames = frames + 1 end end
-    t.assertEquals(frames, 1)
+    t.assertEquals(env.povUrl, 'udp://10.0.0.2:4448?pkt_size=1316')
+    env.clock.advance(300)
+    env.server.update()
+    local told = povMessages(env)
+    t.assertContains(told[1], '"state":"starting"')
+    t.assertContains(told[#told], '"state":"live"')
+    t.assertContains(told[#told], '"inside":true')
     env.transport.push('cmd|pov|0', '10.0.0.2')
     env.server.update()
     t.assertEquals(env.povDestroyed, 1)
@@ -661,12 +676,22 @@ t.describe('server: point of view video', function()
     local env = setup({ pov = true })
     connect(env)
     env.server.onInputBindingsChanged({ ['vinput' .. env.server.clients.get('10.0.0.2').deviceInst] = 0 })
-    env.transport.push('cmd|pov|high', '10.0.0.2')
+    env.transport.push('cmd|pov|1080p30', '10.0.0.2')
     env.server.update()
-    t.assertEquals(env.povWidth, 1280)
+    t.assertEquals(env.povWidth, 1920)
     env.transport.push('cmd|cam_next', '10.0.0.2')
     env.server.update()
     t.assertEquals(env.povCamera, 1)
+  end)
+  t.it('tells the phone why there is no video', function()
+    local env = setup({ pov = true, noEncoder = true })
+    connect(env)
+    env.server.onInputBindingsChanged({ ['vinput' .. env.server.clients.get('10.0.0.2').deviceInst] = 0 })
+    env.transport.push('cmd|pov|1', '10.0.0.2')
+    env.server.update()
+    local told = povMessages(env)
+    t.assertContains(told[1], '"state":"error"')
+    t.assertContains(told[1], '"error":"encoder"')
   end)
   t.it('frees the views when the mod stops', function()
     local env = setup({ pov = true })

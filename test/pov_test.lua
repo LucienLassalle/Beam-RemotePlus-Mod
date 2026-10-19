@@ -4,22 +4,26 @@ local povModule = require('/lua/ge/extensions/beamRemotePlus/pov')
 
 local function setup(opts)
   opts = opts or {}
-  local env = { clock = fakes.clock(), views = {}, destroyed = 0, sent = {}, inside = true }
-  if opts.frame ~= nil then env.frame = opts.frame else env.frame = 'JPEG' end
+  local env = { clock = fakes.clock(), views = {}, outputs = {}, destroyed = 0, stopped = 0, told = {}, status = 1, inside = true }
   env.pov = povModule.new({
     createView = function(id, player, w, h)
       if opts.noViews then return nil, 'unavailable:render_views' end
-      local view = { id = id, player = player, w = w, h = h, active = true }
+      local view = { id = id, player = player, w = w, h = h }
       env.views[#env.views + 1] = view
       return view
     end,
     destroyView = function() env.destroyed = env.destroyed + 1 end,
-    setActive = function(view, on) view.active = on end,
-    capture = function(view)
-      return type(env.frame) == 'function' and env.frame(view) or env.frame, env.inside
+    startOutput = function(view, url, quality)
+      if opts.noOutput then return nil, 'no_output' end
+      local output = { view = view, url = url, quality = quality }
+      env.outputs[#env.outputs + 1] = output
+      return output
     end,
+    stopOutput = function() env.stopped = env.stopped + 1 end,
+    outputStatus = function() return env.status end,
+    update = function() return env.inside end,
     cycleCamera = function(view, offset) view.cycled = offset return true end,
-    send = function(payload, ip, port) env.sent[#env.sent + 1] = { payload = payload, ip = ip, port = port } end,
+    notify = function(ip, info) env.told[#env.told + 1] = { ip = ip, info = info } end,
     clock = env.clock.fn,
   })
   env.clients = {}
@@ -28,97 +32,81 @@ local function setup(opts)
     env.clients[ip] = { ip = ip, player = player }
     return env.clients[ip]
   end
-  -- Frames sent over one game frame, then one more (render, then capture).
-  function env.cycle()
-    return env.pov.tick(env.registry) + env.pov.tick(env.registry)
+  function env.last() return env.told[#env.told].info end
+  -- The next check (4 times a second).
+  function env.tick()
+    env.clock.advance(povModule.CHECK_INTERVAL_MS)
+    return env.pov.tick(env.registry)
   end
   return env
 end
 
-t.describe('pov: frames', function()
-  t.it('numbers every frame and part in a 11-byte header', function()
-    t.assertEquals(povModule.header(1), 'BRPV\0\0\0\1\0\1\0')
-    t.assertEquals(povModule.header(258, 1, 3, povModule.FLAG_INSIDE), 'BRPV\0\0\1\2\1\3\1')
-    t.assertEquals(#povModule.header(1), povModule.HEADER_BYTES)
-  end)
-  t.it('sends the view of the phone player to its POV port', function()
+t.describe('pov: video', function()
+  t.it('encodes the view of the phone player to its video port', function()
     local env = setup()
     t.assertTrue(env.pov.start(env.client('10.0.0.2', 1)))
     t.assertEquals(env.views[1].player, 1)
-    t.assertEquals(env.views[1].w, povModule.QUALITIES[povModule.DEFAULT_QUALITY].width)
-    t.assertEquals(env.cycle(), 1)
-    t.assertEquals(env.sent[1].ip, '10.0.0.2')
-    t.assertEquals(env.sent[1].port, povModule.POV_PORT)
-    t.assertEquals(env.sent[1].payload, povModule.header(1, 0, 1, povModule.FLAG_INSIDE) .. 'JPEG')
+    t.assertEquals(env.views[1].w, 1280)
+    t.assertEquals(env.outputs[1].url, 'udp://10.0.0.2:4448?pkt_size=1316')
+    t.assertEquals(env.outputs[1].quality, povModule.DEFAULT_QUALITY)
+    t.assertEquals(env.last().state, povModule.STARTING)
   end)
-  t.it('tells when the camera is outside the car', function()
+  t.it('tells the phone once it is live, and the kind of camera', function()
     local env = setup()
+    env.pov.start(env.client('10.0.0.2', 0))
+    env.status = 0
+    env.tick()
+    t.assertEquals(env.last().state, povModule.LIVE)
+    t.assertTrue(env.last().inside)
+    local told = #env.told
+    env.tick()
+    t.assertEquals(#env.told, told) -- nothing new
     env.inside = false
-    env.pov.start(env.client('10.0.0.2', 0))
-    env.cycle()
-    t.assertEquals(env.sent[1].payload:byte(11), 0)
+    env.tick()
+    t.assertFalse(env.last().inside)
   end)
-  t.it('cuts the big frames in parts', function()
-    local env = setup({ frame = string.rep('a', povModule.PART_BYTES) .. 'bc' })
-    env.pov.start(env.client('10.0.0.2', 0), 'high')
-    t.assertEquals(env.cycle(), 1)
-    t.assertEquals(#env.sent, 2)
-    t.assertEquals(env.sent[1].payload:sub(1, povModule.HEADER_BYTES), povModule.header(1, 0, 2, povModule.FLAG_INSIDE))
-    t.assertEquals(env.sent[2].payload, povModule.header(1, 1, 2, povModule.FLAG_INSIDE) .. 'bc')
-  end)
-  t.it('renders a view only in the game frame before its capture', function()
+  t.it('offers 1080p', function()
     local env = setup()
-    env.pov.start(env.client('10.0.0.2', 0))
-    t.assertFalse(env.views[1].active)
-    t.assertEquals(env.pov.tick(env.registry), 0)
-    t.assertTrue(env.views[1].active)
-    t.assertEquals(env.pov.tick(env.registry), 1)
-    t.assertFalse(env.views[1].active)
+    env.pov.start(env.client('10.0.0.2', 0), '1080p60')
+    t.assertEquals(env.views[1].w, 1920)
+    t.assertEquals(env.views[1].h, 1080)
   end)
-  t.it('never captures two game frames in a row, even when the game is slow', function()
-    local env = setup()
-    env.pov.start(env.client('10.0.0.2', 0))
-    t.assertEquals(env.cycle(), 1)
-    env.clock.advance(100)
-    t.assertEquals(env.pov.tick(env.registry), 0)
-    env.clock.advance(100)
-    t.assertEquals(env.pov.tick(env.registry), 1)
-  end)
-  t.it('keeps to the frame rate of its quality when the game is fast', function()
-    for quality, fps in pairs({ low = 30, medium = 20, high = 20 }) do
-      local env = setup()
-      env.pov.start(env.client('10.0.0.2', 0), quality)
-      local sent = 0
-      for _ = 1, 120 do -- one second at 120 fps
-        sent = sent + env.pov.tick(env.registry)
-        env.clock.advance(1000 / 120)
-      end
-      t.assertTrue(sent >= fps - 1 and sent <= fps + 1, quality .. ' sent ' .. sent)
-    end
-  end)
-  t.it('captures every phone in the same game frame', function()
-    local env = setup()
-    env.pov.start(env.client('10.0.0.2', 0))
-    env.clock.advance(10)
-    env.pov.start(env.client('10.0.0.3', 1))
-    t.assertEquals(env.cycle(), 2)
-    t.assertEquals(env.pov.tick(env.registry), 0)
-  end)
-  t.it('sends nothing before the view has rendered', function()
-    local env = setup({ frame = false })
-    env.pov.start(env.client('10.0.0.2', 0))
-    t.assertEquals(env.cycle(), 0)
-    t.assertEquals(#env.sent, 0)
+  t.it('never makes the game wait for the encoder, a keyframe each second', function()
+    t.assertEquals(povModule.encoderOptions('720p60'), 'async_depth=2,g=60')
+    t.assertEquals(povModule.encoderOptions('1080p30'), 'async_depth=2,g=30')
   end)
 end)
 
-t.describe('pov: lifecycle', function()
+t.describe('pov: no video', function()
+  t.it('tells the phone when the encoder does not start, without falling back', function()
+    local env = setup({ noOutput = true })
+    local ok, err = env.pov.start(env.client('10.0.0.2', 0))
+    t.assertFalse(ok)
+    t.assertEquals(err, povModule.ERR_ENCODER)
+    t.assertEquals(env.last().state, povModule.ERROR)
+    t.assertEquals(env.last().error, povModule.ERR_ENCODER)
+    t.assertEquals(env.destroyed, 1)
+    t.assertFalse(env.pov.isStreaming('10.0.0.2'))
+  end)
+  t.it('tells the phone when the encoder fails, once set up', function()
+    local env = setup()
+    env.pov.start(env.client('10.0.0.2', 0))
+    env.status = -2
+    env.tick() -- still setting up
+    t.assertEquals(env.last().state, povModule.STARTING)
+    env.clock.advance(povModule.START_GRACE_MS)
+    local failed = env.tick()
+    t.assertEquals(failed['10.0.0.2'], povModule.ERR_ENCODER)
+    t.assertEquals(env.last().state, povModule.ERROR)
+    t.assertEquals(env.stopped, 1)
+    t.assertEquals(env.pov.count(), 0)
+  end)
   t.it('needs a player and a known quality', function()
     local env = setup()
     local ok, err = env.pov.start(env.client('10.0.0.2', -1))
     t.assertFalse(ok)
     t.assertEquals(err, 'no_player')
-    ok, err = env.pov.start(env.client('10.0.0.2', 0), 'ultra')
+    ok, err = env.pov.start(env.client('10.0.0.2', 0), '4k')
     t.assertFalse(ok)
     t.assertEquals(err, 'bad_argument')
   end)
@@ -127,25 +115,27 @@ t.describe('pov: lifecycle', function()
     local ok, err = env.pov.start(env.client('10.0.0.2', 0))
     t.assertFalse(ok)
     t.assertEquals(err, 'unavailable:render_views')
-    t.assertFalse(env.pov.isStreaming('10.0.0.2'))
   end)
-  t.it('starting twice keeps one view, another quality makes a new one', function()
+end)
+
+t.describe('pov: lifecycle', function()
+  t.it('starting twice keeps one video, another quality makes a new one', function()
     local env = setup()
     env.pov.start(env.client('10.0.0.2', 0))
     env.pov.start(env.clients['10.0.0.2'])
     t.assertEquals(#env.views, 1)
-    env.pov.start(env.clients['10.0.0.2'], 'low')
+    env.pov.start(env.clients['10.0.0.2'], '1080p30')
     t.assertEquals(#env.views, 2)
+    t.assertEquals(env.stopped, 1)
     t.assertEquals(env.destroyed, 1)
-    t.assertEquals(env.views[2].w, 640)
     t.assertEquals(env.pov.count(), 1)
   end)
-  t.it('stops and frees the view', function()
+  t.it('stops the encoder and frees the view', function()
     local env = setup()
     env.pov.start(env.client('10.0.0.2', 0))
     t.assertTrue(env.pov.stop('10.0.0.2'))
+    t.assertEquals(env.stopped, 1)
     t.assertEquals(env.destroyed, 1)
-    t.assertEquals(env.pov.count(), 0)
     t.assertFalse(env.pov.stop('10.0.0.2'))
   end)
   t.it('stops the video of a phone gone or left without a player', function()
@@ -154,7 +144,7 @@ t.describe('pov: lifecycle', function()
     env.pov.start(env.client('10.0.0.3', 1))
     env.clients['10.0.0.2'] = nil
     env.clients['10.0.0.3'].player = -1
-    env.pov.tick(env.registry)
+    env.tick()
     t.assertEquals(env.pov.count(), 0)
     t.assertEquals(env.destroyed, 2)
   end)
@@ -162,10 +152,10 @@ t.describe('pov: lifecycle', function()
     local env = setup()
     env.pov.start(env.client('10.0.0.2', 0))
     env.clients['10.0.0.2'].player = 2
-    env.cycle()
+    env.tick()
     t.assertEquals(env.destroyed, 1)
     t.assertEquals(env.views[2].player, 2)
-    t.assertEquals(#env.sent, 1)
+    t.assertEquals(#env.outputs, 2)
   end)
   t.it('cycles the camera of the video of a phone, if it has one', function()
     local env = setup()
@@ -192,4 +182,3 @@ t.describe('pov: cameras of the video', function()
     t.assertEquals(cycle(order, 'orbit', 'orbit', 'occupant.FL', 1), 'occupant.FL')
   end)
 end)
-

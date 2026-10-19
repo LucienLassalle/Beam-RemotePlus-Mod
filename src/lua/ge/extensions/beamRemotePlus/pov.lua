@@ -4,42 +4,55 @@
 -- Each phone asking for it gets its own hidden view of the game (a camera
 -- context of the game following the car of its player, the way split-screen
 -- views do, never shown on the PC screen). It starts on the driver's seat;
--- the camera buttons of the phone then cycle its cameras, not the PC's. Its
--- frames are captured as JPEG and sent to the phone's POV_PORT, cut in
--- datagrams of PART_BYTES at most:
---   "BRPV" | frame number (uint32, big endian) | part | parts | flags | JPEG part
+-- the camera buttons of the phone then cycle its cameras, not the PC's.
 --
--- Cost: a view renders only in the game frame before its capture, and the
--- capture waits for the graphics card to finish that frame, then encodes the
--- JPEG (measured 15-29 ms from 360p to 720p). So every phone due is
--- captured in the same game frame, and a capture always skips a game frame:
--- when the game slows down, so does the video, instead of the video slowing
--- the game down further.
+-- The game encodes that view itself with the video encoder of the graphics
+-- card (H.264, libbngvs: NVENC, AMF, QuickSync or Vulkan video) straight
+-- from the GPU, and sends it as MPEG-TS over UDP to the phone's POV_PORT.
+-- Without a usable encoder there is no video: the phone is told why
+-- (state 'error'), there is no fallback.
 --
--- Pure: the game's render views are behind deps (see main.lua).
+-- The phone is kept informed by "pov" messages (see protocol.lua): the
+-- state of its video and whether the camera is a seat camera.
+--
+-- Pure: the game's render views and encoder are behind deps (see main.lua).
 
 local M = {}
 
 M.POV_PORT = 4448
-M.MAGIC = 'BRPV'
-M.HEADER_BYTES = 11
-M.PART_BYTES = 32000
-M.FLAG_INSIDE = 1 -- the camera is inside the car (its own dashboard is in view)
+M.CHECK_INTERVAL_MS = 250
+-- An output reads as failed until the game has set its encoder up (the
+-- next frames): only a failure lasting this long counts.
+M.START_GRACE_MS = 1000
 
--- Asked by the phone (cmd|pov|<quality>, 1 = the default one). Measured on
--- a 60 fps game: low 45 fps, medium 47 fps, high 41 fps.
+-- Asked by the phone (cmd|pov|<quality>, 1 = the default one).
 M.QUALITIES = {
-  low = { width = 640, height = 360, intervalMs = 33 },     -- 30 frames per second
-  medium = { width = 960, height = 540, intervalMs = 50 },  -- 20 frames per second
-  high = { width = 1280, height = 720, intervalMs = 50 },   -- 20 frames per second
+  ['720p60'] = { width = 1280, height = 720, fps = 60, bitrate = 8000000 },
+  ['1080p30'] = { width = 1920, height = 1080, fps = 30, bitrate = 10000000 },
+  ['1080p60'] = { width = 1920, height = 1080, fps = 60, bitrate = 16000000 },
 }
-M.DEFAULT_QUALITY = 'medium'
+M.DEFAULT_QUALITY = '720p60'
 
-function M.header(frame, part, parts, flags)
-  local n = frame % 4294967296
-  return M.MAGIC .. string.char(
-    math.floor(n / 16777216) % 256, math.floor(n / 65536) % 256, math.floor(n / 256) % 256, n % 256,
-    part or 0, parts or 1, flags or 0)
+-- Video states sent to the phone.
+M.STARTING = 'starting'
+M.LIVE = 'live'
+M.ERROR = 'error'
+
+-- Why there is no video (error of the 'error' state).
+M.ERR_ENCODER = 'encoder' -- the graphics card's video encoder did not start
+
+-- Encoder options (FFmpeg names). async_depth=2: the game hands a frame to
+-- the encoder and goes on, its packet comes out on the next frame. The
+-- library's default (1) makes every game frame wait for its encode: 60 fps
+-- fell to 27 with a 720p video (Vulkan video, Radeon RX 6800 XT); with 2 it
+-- stays at 60, even at 1080p 60. A keyframe each second limits the damage
+-- of a lost packet.
+function M.encoderOptions(quality)
+  return 'async_depth=2,g=' .. M.QUALITIES[quality].fps
+end
+
+function M.url(ip)
+  return 'udp://' .. ip .. ':' .. M.POV_PORT .. '?pkt_size=1316'
 end
 
 -- The game cycles the cameras of a hidden view without the seat cameras
@@ -65,34 +78,63 @@ end
 deps:
   createView(id, player, width, height) -> view, or nil, err
   destroyView(view)
-  setActive(view, on)              renders the view in the next game frames, or not
-  capture(view) -> JPEG bytes or nil (nothing rendered yet), inside (bool)
+  startOutput(view, url, quality) -> output, or nil, err   encodes the view to url
+  stopOutput(output)
+  outputStatus(output) -> 1 starting, 0 live, < 0 failed
+  update(view) -> inside           keeps the camera of the view; true for a seat camera
   cycleCamera(view, offset) -> ok, err
-  send(payload, ip, port)
+  notify(ip, info)                 info = { state, error, inside, quality }
   clock() -> ms
 ]]
 function M.new(deps)
   local self = {}
-  local streams = {} -- [ip] = { player, quality, view, frame, nextAt, armed }
+  local streams = {} -- [ip] = { player, quality, view, output, state, error, inside }
   local order = {}   -- ips, in start order
   local nextId = 0
+  local nextCheck = 0
 
-  local function release(stream)
-    if stream.view then pcall(deps.destroyView, stream.view) end
-    stream.view = nil
-    stream.armed = false
+  local function tell(ip, stream)
+    deps.notify(ip, { state = stream.state, error = stream.error, inside = stream.inside, quality = stream.quality })
   end
 
-  local function open(stream)
+  local function release(stream)
+    if stream.output then pcall(deps.stopOutput, stream.output) end
+    if stream.view then pcall(deps.destroyView, stream.view) end
+    stream.output, stream.view = nil, nil
+  end
+
+  -- View + encoder for the stream's player and quality: ok, err, detail.
+  local function open(ip, stream)
     nextId = nextId + 1
     local q = M.QUALITIES[stream.quality]
     local ok, view, err = pcall(deps.createView, 'beamRemotePlusPov' .. nextId, stream.player, q.width, q.height)
-    if ok and view then
-      stream.view = view
-      pcall(deps.setActive, view, false)
-      return true
+    if not (ok and view) then return false, ok and err or view end
+    stream.view = view
+    local output
+    ok, output, err = pcall(deps.startOutput, view, M.url(ip), stream.quality)
+    if not (ok and output) then
+      release(stream)
+      return false, M.ERR_ENCODER, ok and err or output
     end
-    return false, ok and err or view
+    stream.output = output
+    stream.startedAt = deps.clock()
+    stream.state, stream.error = M.STARTING, nil
+    return true
+  end
+
+  local function remove(ip)
+    for i = #order, 1, -1 do
+      if order[i] == ip then table.remove(order, i) end
+    end
+    streams[ip] = nil
+  end
+
+  -- No video for this phone, and why.
+  local function fail(ip, stream, err)
+    release(stream)
+    stream.state, stream.error = M.ERROR, err
+    tell(ip, stream)
+    remove(ip)
   end
 
   function self.isStreaming(ip) return streams[ip] ~= nil end
@@ -103,18 +145,26 @@ function M.new(deps)
 
   -- Starts the video of a phone (player = its player, 0-based), or changes
   -- its quality (a key of QUALITIES, the default one when nil).
+  -- Returns ok, err, detail; the phone is told of an encoder failure.
   function self.start(client, quality)
     quality = quality or M.DEFAULT_QUALITY
     if not M.QUALITIES[quality] then return false, 'bad_argument' end
     if client.player == nil or client.player < 0 then return false, 'no_player' end
     local stream = streams[client.ip]
-    if stream and stream.quality == quality then return true end
+    if stream and stream.quality == quality then
+      tell(client.ip, stream)
+      return true
+    end
     if stream then self.stop(client.ip) end
-    stream = { player = client.player, quality = quality, frame = 0, nextAt = 0, armed = false }
-    local ok, err = open(stream)
-    if not ok then return false, err end
+    stream = { player = client.player, quality = quality }
+    local ok, err, detail = open(client.ip, stream)
+    if not ok then
+      if err == M.ERR_ENCODER then fail(client.ip, stream, err) end
+      return false, err, detail
+    end
     streams[client.ip] = stream
     order[#order + 1] = client.ip
+    tell(client.ip, stream)
     return true
   end
 
@@ -122,10 +172,7 @@ function M.new(deps)
     local stream = streams[ip]
     if not stream then return false end
     release(stream)
-    streams[ip] = nil
-    for i = #order, 1, -1 do
-      if order[i] == ip then table.remove(order, i) end
-    end
+    remove(ip)
     return true
   end
 
@@ -141,67 +188,47 @@ function M.new(deps)
     return deps.cycleCamera(stream.view, offset)
   end
 
-  local function captureAndSend(ip, stream)
-    local ok, jpeg, inside = pcall(deps.capture, stream.view)
-    if not ok or type(jpeg) ~= 'string' or jpeg == '' then return false end
-    stream.frame = stream.frame + 1
-    local parts = math.ceil(#jpeg / M.PART_BYTES)
-    if parts > 255 then return false end
-    local flags = inside and M.FLAG_INSIDE or 0
-    for part = 0, parts - 1 do
-      local from = part * M.PART_BYTES + 1
-      deps.send(M.header(stream.frame, part, parts, flags) .. jpeg:sub(from, from + M.PART_BYTES - 1), ip, M.POV_PORT)
+  local function check(ip, stream)
+    local ok, status = pcall(deps.outputStatus, stream.output)
+    if not ok or type(status) ~= 'number' or status < 0 then
+      if deps.clock() - stream.startedAt < M.START_GRACE_MS then return end
+      return fail(ip, stream, M.ERR_ENCODER)
     end
-    return true
+    local okInside, inside = pcall(deps.update, stream.view)
+    inside = okInside and inside == true
+    local state = status == 0 and M.LIVE or stream.state
+    if state ~= stream.state or inside ~= stream.inside then
+      stream.state, stream.inside = state, inside
+      tell(ip, stream)
+    end
   end
 
-  -- Called once per game frame. clients: the registry (clients.lua) —
-  -- phones gone or without a player any more lose their video, a phone
-  -- given another player gets the view of its new car. Returns the number
-  -- of frames sent.
+  -- Called every game frame (checks 4 times a second). clients: the
+  -- registry (clients.lua) — phones gone or without a player any more lose
+  -- their video, a phone given another player gets the view of its new car.
+  -- Returns the phones whose video failed, as { [ip] = err }.
   function self.tick(clients)
+    local now = deps.clock()
+    if now < nextCheck then return {} end
+    nextCheck = now + M.CHECK_INTERVAL_MS
+    local failed = {}
     for _, ip in ipairs({ unpack(order) }) do
+      local stream = streams[ip]
       local client = clients.get(ip)
       if not client or client.player == nil or client.player < 0 then
         self.stop(ip)
-      elseif client.player ~= streams[ip].player then
-        local stream = streams[ip]
-        release(stream)
-        stream.player = client.player
-        if not open(stream) then self.stop(ip) end
+      else
+        if client.player ~= stream.player then
+          release(stream)
+          stream.player = client.player
+          local ok, err = open(ip, stream)
+          if not ok then fail(ip, stream, err) end
+        end
+        if streams[ip] then check(ip, stream) end
+        if not streams[ip] then failed[ip] = stream.error end
       end
     end
-    -- Views armed in the previous game frame have rendered: capture them.
-    local sent, captured = 0, false
-    for _, ip in ipairs({ unpack(order) }) do
-      local stream = streams[ip]
-      if stream and stream.armed then
-        captured = true
-        stream.armed = false
-        pcall(deps.setActive, stream.view, false)
-        if captureAndSend(ip, stream) then sent = sent + 1 end
-      end
-    end
-    if captured or #order == 0 then return sent end
-    -- Arms the views due, and with them those due within half their interval.
-    local now = deps.clock()
-    local due = false
-    for _, ip in ipairs(order) do
-      if now >= streams[ip].nextAt then due = true end
-    end
-    if not due then return 0 end
-    for _, ip in ipairs(order) do
-      local stream = streams[ip]
-      local interval = M.QUALITIES[stream.quality].intervalMs
-      if now >= stream.nextAt - interval / 2 then
-        -- Steady pace, without catching up after a stall.
-        if now - stream.nextAt > interval then stream.nextAt = now end
-        stream.nextAt = stream.nextAt + interval
-        stream.armed = true
-        pcall(deps.setActive, stream.view, true)
-      end
-    end
-    return 0
+    return failed
   end
 
   return self
