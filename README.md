@@ -27,11 +27,13 @@ longer maintained.
   the real structure of the vehicle for the phone's damage view, and a radar
   of the cars around.
 - Point of view video (BeamNG.drive 0.40 or newer): the phone can show the
-  view from the driver's seat of its own car, rendered by the game in a
-  hidden view (the PC screen keeps its own camera). It costs the PC an extra
-  render of the world at reduced detail per phone watching it, like one more
-  split-screen view, and each captured frame waits for the graphics card:
-  measured 60 → 47 fps in game for a 30 fps video (BeamNG.drive 0.40, 1440p).
+  view of its own car, from the driver's seat or any camera picked with its
+  camera buttons, rendered by the game in a hidden view (the PC screen keeps
+  its own camera). It costs the PC an extra render of the world at reduced
+  detail per phone watching it, like one more split-screen view, and each
+  captured frame waits for the graphics card: measured 60 → 47 fps in game
+  at 960×540, 20 frames per second (41 fps at 1280×720; BeamNG.drive 0.40,
+  1440p).
 - Vehicle functions from the phone: horn, lights, indicators, hazards,
   parking brake, ignition, drive mode, gearbox mode, cruise control, gears,
   recovery, vehicle and camera switching, and on police cars, ambulances,

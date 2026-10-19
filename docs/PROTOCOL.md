@@ -112,10 +112,10 @@ cmd|<name>|1 / |0     hold commands (pressed / released)
 | `pit_limiter` | press | pit limiter on / off on the fr04 vehicle mods (F4, CF26) |
 | `gear_up`, `gear_down` | press | sequential shift |
 | `next_vehicle`, `prev_vehicle` | press | switch vehicle (player's own) |
-| `cam_next`, `cam_prev` | press | camera |
+| `cam_next`, `cam_prev` | press | camera (of the point of view video instead while the phone has it, section 6) |
 | `debug` | hold | `1` = acknowledge every command, `0` = errors only |
 | `skeleton` | press | sends the skeleton of the vehicle (`skeleton` messages below) |
-| `pov` | hold | `1` = start the point of view video of the phone (section 6), `0` = stop it. Listed in the session `commands` only when the game can do it; fails with `no_player` while the phone has no player |
+| `pov` | press | `low`, `medium` or `high` = start the point of view video of the phone in that quality (section 6), `1` = in the default one (`medium`), `0` = stop it. Listed in the session `commands` only when the game can do it; fails with `no_player` while the phone has no player |
 | `leave` | press | the player disconnects on purpose: the car is stopped like after a lost signal (watchdog above), then the phone is disconnected once the handbrake holds it (a second screen at once); never acknowledged |
 | `actions` | press | lists the commands of the "More" sheet for the vehicle (`actions` message below) |
 | `action\|<id>` | press | runs one of them (pressed then released) |
@@ -275,22 +275,34 @@ shift light (0/1), oil temperature.
 
 ## 6. Point of view video (BeamNG.drive 0.40 or newer)
 
-After `cmd|pov|1`, the mod renders the view from the driver's seat of the
-car of the phone's player (a hidden view of the game, never drawn on the PC
-screen; the player keeps its own camera on the PC) and sends its frames to
-the phone, port **4448**, one datagram per frame:
+After `cmd|pov|<quality>`, the mod renders the view of the car of the
+phone's player from its driver's seat (a hidden view of the game, never
+drawn on the PC screen; the player keeps its own camera on the PC) and
+sends its frames to the phone, port **4448**, each frame cut in datagrams of
+32000 bytes of JPEG at most:
 
 ```
-"BRPV" | frame number (uint32, big endian) | JPEG image
+"BRPV" | frame number (uint32, big endian) | part (uint8) | parts (uint8) | flags (uint8) | JPEG part
 ```
 
-- Up to 30 frames per second, never two game frames in a row (the video
-  slows down with the game), 640×360 (512×288, then 426×240 when a frame
-  would not fit a datagram). Frame numbers grow by one: a gap is a lost
-  frame, an older number a late one (drop it).
+- Parts are numbered from 0; the JPEG is the parts joined in order. A frame
+  missing a part when a newer one arrives is lost. Frame numbers grow by
+  one: an older number is a late frame (drop it).
+- flags bit 0: the camera is a seat camera (driver or passenger), the car's
+  own dashboard is in view.
+
+| Quality | Image | Frames per second, at most | Game, 60 fps without video (1440p) |
+|---|---|---|---|
+| `low` | 640×360 | 30 | 45 fps |
+| `medium` (default, `1`) | 960×540 | 20 | 47 fps |
+| `high` | 1280×720 | 20 | 41 fps |
+
+- A capture always skips a game frame: the video slows down with the game.
+- While the phone has the video, `cam_next` / `cam_prev` cycle the cameras
+  of its video, not the PC's. Another car brings the driver's seat back.
 - The video follows the phone: another player, another car. It stops with
   `cmd|pov|0`, when the phone disconnects or loses its player.
 - Each video costs the game an extra render of the world (at reduced detail,
-  like a split-screen view) and a JPEG capture. The first capture of a game
-  frame waits for the graphics card, so all the phones are captured in the
-  same game frame.
+  like a split-screen view), only in the game frame before each capture, and
+  the capture waits for the graphics card, then encodes the JPEG. All the
+  phones due are captured in the same game frame.
