@@ -144,6 +144,9 @@ flowchart LR
   New-NetFirewallRule -DisplayName "Beam-RemotePlus" -Direction Inbound -Protocol UDP -LocalPort 4444,4446 -Action Allow
   ```
 
+  The point of view video goes out from the PC to the phone (its UDP 4448),
+  like the answers of the mod (its UDP 4447): no rule is needed for them.
+
   With the phone's connection shared over USB (USB tethering), Windows sees
   a new network, usually classified as **Public**: the rule above covers
   every network profile, while an "allow" given only to private networks at
