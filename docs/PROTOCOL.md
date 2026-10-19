@@ -72,6 +72,9 @@ Sent at ~60 Hz. Each phone gets its own virtual input device named
 `BeamRemotePlus (<device name>)` (input map `bngremoteplusv1`), which BeamNG
 assigns to a player in local multiplayer.
 
+The steering axis uses the game's **direct** filter (like a wheel), not the
+gamepad one, which would smooth it and limit it at speed.
+
 **Watchdog.** A driving phone that sends no control packet for **1 s**
 (Wi-Fi drop, app closed or frozen) no longer accelerates: the mod centres
 its steering, releases its hold commands (horn...) and, from the car's
@@ -157,6 +160,7 @@ provide it (show "n/a", do not assume 0).
 | `odometer`, `trip` | metres |
 | `gx`, `gy`, `gz` | smoothed acceleration, m/s² |
 | `driftAngle` | degrees -180..180 from where the car points to where it goes, counter-clockwise seen from above (positive: it goes to the left of its nose); omitted below 3 m/s |
+| `steeringLock` | steering wheel rotation giving full lock, degrees each way (`steeringWheelLock` of the vehicle) |
 | `shiftLight` | bool |
 | `tirePressures` | object `{ "FL": kPa, "FR": kPa, ... }` |
 | `tirePressuresNominal` | same, the pressures set in the vehicle configuration (compare to them, race cars run low pressures) |

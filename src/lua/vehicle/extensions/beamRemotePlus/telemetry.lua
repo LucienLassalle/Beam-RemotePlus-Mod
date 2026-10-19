@@ -195,6 +195,9 @@ function M.collect(e, extra)
     gz = round(extra.gz, 3),
     envTemp = round(extra.envTemp, 1),
     driftAngle = extra.driftAngle,
+    -- Steering wheel rotation (degrees each way) giving full lock, the one
+    -- the game matches real wheels against: the phone turns as far.
+    steeringLock = round(extra.steeringLock, 0),
     driveMode = extra.driveMode,
     -- Emergency lights and siren: only for vehicles fitted with them (every
     -- vehicle has a lightbar electric).
@@ -358,6 +361,7 @@ local function readStatic()
   s.skeleton = buildSkeleton(ref, engineNode)
   s.hasLightbar, s.hasSiren = M.emergencyEquipment(controller and controller.getControllersByType, v and v.data)
   s.hasPitLimiter = extensions and extensions.isExtensionLoaded and extensions.isExtensionLoaded('fr04PitLimiter') or nil
+  s.steeringLock = v and v.data and v.data.input and tonumber(v.data.input.steeringWheelLock) or nil
   static = s
   return static
 end
@@ -481,6 +485,7 @@ function M.send()
       hasLightbar = fixed.hasLightbar,
       hasSiren = fixed.hasSiren,
       hasPitLimiter = fixed.hasPitLimiter,
+      steeringLock = fixed.steeringLock,
       skeleton = fixed.skeleton and fixed.skeleton.id,
       skeletonDamage = readSkeletonDamage(fixed.skeleton),
     }
