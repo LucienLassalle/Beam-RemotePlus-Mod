@@ -7,6 +7,7 @@ local clientsModule = require('/lua/ge/extensions/beamRemotePlus/clients')
 local commandsModule = require('/lua/ge/extensions/beamRemotePlus/commands')
 local telemetryModule = require('/lua/ge/extensions/beamRemotePlus/telemetry')
 local optionalModsModule = require('/lua/ge/extensions/beamRemotePlus/optionalMods')
+local povModule = require('/lua/ge/extensions/beamRemotePlus/pov')
 local versionModule = require('/lua/ge/extensions/beamRemotePlus/version')
 local vehicleActions = require('/lua/ge/extensions/beamRemotePlus/vehicleActions')
 
@@ -65,6 +66,8 @@ deps:
   nativeRemote                optional nativeRemote.new(...) instance: the
                               game's own remote control (UDP 4444)
   listVehicleActions(model)   optional, the vehicle's own actions (vehicleActions.vehicleEntries)
+  povViews                    optional { createView, destroyView, capture }: the
+                              game's hidden views for the point of view video (pov.lua)
   runVehicleAction(vehicle, name, value)  optional, runs one of them -> ok, err
 ]]
 function M.new(deps)
@@ -128,6 +131,24 @@ function M.new(deps)
     return deps.runVehicleAction(vehicle, name, value)
   end
 
+  local pov = deps.povViews and povModule.new({
+    createView = deps.povViews.createView,
+    destroyView = deps.povViews.destroyView,
+    capture = deps.povViews.capture,
+    send = function(payload, ip, port) deps.transport.send(payload, ip, port) end,
+    clock = deps.clock,
+  }) or nil
+
+  local function setPov(client, on)
+    if not on then
+      if pov.stop(client.ip) then log.info('point of view video stopped for ' .. client.deviceName) end
+      return true
+    end
+    local ok, err = pov.start(client)
+    if ok then log.info('point of view video for ' .. client.deviceName .. ' (player ' .. tostring(client.player) .. ')') end
+    return ok, err
+  end
+
   local commands = commandsModule.new({
     getVehicle = deps.getVehicle,
     switchVehicle = deps.switchVehicle,
@@ -136,6 +157,7 @@ function M.new(deps)
     buttons = { shiftUp = clientsModule.BUTTON_SHIFT_UP, shiftDown = clientsModule.BUTTON_SHIFT_DOWN },
     requestActions = requestActions,
     runVehicleAction = runVehicleAction,
+    setPov = pov and setPov or nil,
   })
 
   local telemetry = telemetryModule.new({
@@ -301,7 +323,10 @@ function M.new(deps)
     return true
   end
 
-  function self.shutdown() stopListening() end
+  function self.shutdown()
+    if pov then pov.stopAll() end
+    stopListening()
+  end
 
   -- Packet handlers ---------------------------------------------------------
 
@@ -564,6 +589,12 @@ function M.new(deps)
       lastHeartbeat = now
       log.debug('heartbeat: ' .. clients.count() .. ' phone(s) connected')
     end
+  end
+
+  -- Point of view captures, just before the game renders its frame (measured
+  -- cheaper there than in onUpdate).
+  function self.onPreRender()
+    if pov then pov.tick(clients) end
   end
 
   log.debugEnabled = deps.config.get('debug')

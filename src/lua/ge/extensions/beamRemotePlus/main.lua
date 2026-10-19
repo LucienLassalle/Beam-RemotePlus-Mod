@@ -6,7 +6,7 @@
 
 local MODULE_DIR = '/lua/ge/extensions/beamRemotePlus/'
 local SIBLINGS = { 'json', 'protocol', 'config', 'i18n', 'logger', 'clients',
-  'vehicleActions', 'commands', 'radar', 'telemetry', 'transport', 'nativeRemote', 'version', 'optionalMods', 'server' }
+  'vehicleActions', 'commands', 'radar', 'telemetry', 'transport', 'nativeRemote', 'version', 'optionalMods', 'pov', 'server' }
 
 -- require() caches by path independently of extensions.reload(): without
 -- this, reloading the mod would keep running stale sibling modules.
@@ -135,6 +135,74 @@ local function runVehicleAction(vehicle, name, value)
   return true
 end
 
+-- Point of view video (pov.lua) ----------------------------------------------
+-- A hidden render view per phone, driven by a camera context of the game
+-- (0.40, the split-screen machinery): it follows the car of the phone's
+-- player from the driver's seat, never drawn on the PC screen. The context
+-- gets an input player of its own (POV_INPUT_PLAYER, counting down), so the
+-- player keeps its own camera controls on the PC.
+
+local POV_INPUT_PLAYER = 63
+local POV_DIR = '/temp/'
+local POV_CAMERA_CHECK_S = 1
+local povInputs = {} -- input players in use
+
+-- Same quality cut as split-screen views (render/splitScreen.lua): mirrors
+-- and dynamic reflections are each an extra render.
+local function povQuality(rv)
+  local ok, s = pcall(RenderSettings.getGlobals)
+  if not ok or not s then return end
+  s.meshDetailAdjust = s.meshDetailAdjust * 0.5
+  s.groundCoverScale = s.groundCoverScale * 0.5
+  s.vehicleMirrorsEnabled = false
+  s.vehicleDynamicReflectionsEnabled = false
+  rv.settingsOverride = s
+  rv.settingsOverrideEnabled = true
+end
+
+local povViews = {
+  createView = function(id, player, width, height)
+    -- Render views driven by camera contexts arrived with 0.40.
+    if not (RenderViewManagerInstance and core_camera and core_camera.createContext) then
+      return nil, 'unavailable:render_views'
+    end
+    local input = POV_INPUT_PLAYER
+    while povInputs[input] do input = input - 1 end
+    local rv = RenderViewManagerInstance:getOrCreateView(id)
+    rv.luaOwned = true
+    rv.renderEditorIcons = false
+    rv.namedTexTargetColor = id
+    rv.resolution = Point2I(width, height)
+    rv.viewPort = RectI(0, 0, width, height)
+    rv.compositeRect = RectI(-2, -2, 2, 2) -- off the window: never composited on screen
+    rv.frustum = Frustum.construct(false, math.rad(70), width / height, 0.1, 2000)
+    povQuality(rv)
+    core_camera.createContext(id, id, input, player)
+    povInputs[input] = true
+    return { id = id, rv = rv, input = input, player = player, file = POV_DIR .. id .. '.jpg', checkAt = 0 }
+  end,
+  destroyView = function(view)
+    core_camera.destroyContext(view.id)
+    RenderViewManagerInstance:destroyView(view.rv)
+    povInputs[view.input] = nil
+    FS:removeFile(view.file)
+  end,
+  capture = function(view)
+    -- The context starts on the car's default camera, and gets it back when
+    -- the car changes: the driver's seat camera is selected again.
+    local now = os.clockhp()
+    if now >= view.checkAt then
+      view.checkAt = now + POV_CAMERA_CHECK_S
+      local veh = getPlayerVehicle(view.player)
+      local driver = veh and core_camera.getDriverCameraNameById(veh:getID())
+      local state = driver and core_camera.getContextCameraState(view.id)
+      if state and state.cam ~= driver then core_camera.setContextCamera(view.id, driver) end
+    end
+    if not view.rv:saveToDisk(view.file) then return nil end
+    return readFile(view.file)
+  end,
+}
+
 local function createServer()
   local config = configModule.new({ readJson = jsonReadFile, writeJson = jsonWriteFile })
   config.load()
@@ -159,6 +227,7 @@ local function createServer()
     cycleCamera = cycleCamera,
     listVehicleActions = listVehicleActions,
     runVehicleAction = runVehicleAction,
+    povViews = povViews,
     onDeviceCreated = function()
       if core_input_bindings and core_input_bindings.onDeviceChanged then core_input_bindings.onDeviceChanged() end
     end,
@@ -187,6 +256,12 @@ local function onUpdate()
   if not server then return end
   local ok, err = pcall(server.update)
   if not ok then logger.throttled('update', 3000, 'E', 'update error (recovered): ' .. tostring(err)) end
+end
+
+local function onPreRender()
+  if not server then return end
+  local ok, err = pcall(server.onPreRender)
+  if not ok then logger.throttled('pov', 3000, 'E', 'point of view error (recovered): ' .. tostring(err)) end
 end
 
 local function onInputBindingsChanged(players)
@@ -245,6 +320,7 @@ end
 M.onExtensionLoaded = onExtensionLoaded
 M.onExtensionUnloaded = onExtensionUnloaded
 M.onUpdate = onUpdate
+M.onPreRender = onPreRender
 M.onInputBindingsChanged = onInputBindingsChanged
 M.onLocalParticipantsChanged = onLocalParticipantsChanged
 M.onModManagerReady = onModsChanged

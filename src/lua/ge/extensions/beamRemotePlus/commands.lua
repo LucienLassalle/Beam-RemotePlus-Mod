@@ -70,7 +70,7 @@ M.PRESS_ACTIONS = {
 }
 
 -- What a second-screen phone may still ask: they read, never drive.
-M.DISPLAY_COMMANDS = { debug = true, skeleton = true }
+M.DISPLAY_COMMANDS = { debug = true, skeleton = true, pov = true }
 
 -- Asks the vehicle VM for its skeleton geometry (sent back through
 -- extensions.beamRemotePlus_main.onSkeleton).
@@ -104,6 +104,7 @@ deps:
   buttons = { shiftUp = n, shiftDown = n }
   requestActions(client) -> ok, err      lists the "More" commands (answered later)
   runVehicleAction(client, name, value) -> ok, err   a vehicle's own action
+  setPov(client, on) -> ok, err          optional, starts or stops the point of view video
 ]]
 function M.new(deps)
   local self = {}
@@ -141,6 +142,15 @@ function M.new(deps)
       return true
     end,
   }
+
+  -- Point of view video (pov.lua), only offered when the game can do it.
+  if deps.setPov then
+    special.pov = function(client, arg)
+      local on = M.parseHoldArg(arg)
+      if on == nil then return false, M.ERR_BAD_ARGUMENT end
+      return deps.setPov(client, on)
+    end
+  end
 
   -- Commands of the "More" sheet (vehicleActions.lua), value 1 = pressed,
   -- 0 = released.

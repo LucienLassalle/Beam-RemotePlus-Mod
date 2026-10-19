@@ -57,6 +57,11 @@ local function setup(opts)
       return true
     end,
     nativeRemote = env.native,
+    povViews = opts.pov and {
+      createView = function(id, player) return { id = id, player = player } end,
+      destroyView = function() env.povDestroyed = (env.povDestroyed or 0) + 1 end,
+      capture = function() return 'JPEG' end,
+    } or nil,
     getMods = function() return env.mods end,
     fileExists = function() return false end,
   })
@@ -619,6 +624,44 @@ t.describe('server: player colours', function()
     for _, phone in ipairs(env.server.state().phones) do
       if phone.display then t.assertNil(phone.color) end
     end
+  end)
+end)
+
+t.describe('server: point of view video', function()
+  t.it('streams the view of the phone player once asked, until it stops', function()
+    local env = setup({ pov = true })
+    connect(env)
+    local client = env.server.clients.get('10.0.0.2')
+    env.server.onInputBindingsChanged({ ['vinput' .. client.deviceInst] = 0 })
+    env.transport.push('cmd|pov|1', '10.0.0.2')
+    env.server.update()
+    env.server.onPreRender()
+    local frames = 0
+    for _, s in ipairs(env.transport.sent) do if s.port == 4448 then frames = frames + 1 end end
+    t.assertEquals(frames, 1)
+    env.transport.push('cmd|pov|0', '10.0.0.2')
+    env.server.update()
+    t.assertEquals(env.povDestroyed, 1)
+  end)
+  t.it('is offered only when the game can do it', function()
+    local function offered(env)
+      connect(env)
+      env.server.onInputBindingsChanged({ ['vinput' .. env.server.clients.get('10.0.0.2').deviceInst] = 0 })
+      for _, s in ipairs(env.transport.sent) do
+        if s.payload:find('"type":"session"', 1, true) then return s.payload:find('"pov"', 1, true) ~= nil end
+      end
+    end
+    t.assertTrue(offered(setup({ pov = true })))
+    t.assertFalse(offered(setup()))
+  end)
+  t.it('frees the views when the mod stops', function()
+    local env = setup({ pov = true })
+    connect(env)
+    env.server.onInputBindingsChanged({ ['vinput' .. env.server.clients.get('10.0.0.2').deviceInst] = 0 })
+    env.transport.push('cmd|pov|1', '10.0.0.2')
+    env.server.update()
+    env.server.shutdown()
+    t.assertEquals(env.povDestroyed, 1)
   end)
 end)
 
