@@ -66,7 +66,7 @@ deps:
   nativeRemote                optional nativeRemote.new(...) instance: the
                               game's own remote control (UDP 4444)
   listVehicleActions(model)   optional, the vehicle's own actions (vehicleActions.vehicleEntries)
-  povViews                    optional { createView, destroyView, setActive, capture }: the
+  povViews                    optional { createView, destroyView, setActive, capture, cycleCamera }: the
                               game's hidden views for the point of view video (pov.lua)
   runVehicleAction(vehicle, name, value)  optional, runs one of them -> ok, err
 ]]
@@ -136,6 +136,7 @@ function M.new(deps)
     destroyView = deps.povViews.destroyView,
     setActive = deps.povViews.setActive,
     capture = deps.povViews.capture,
+    cycleCamera = deps.povViews.cycleCamera,
     send = function(payload, ip, port) deps.transport.send(payload, ip, port) end,
     clock = deps.clock,
   }) or nil
@@ -164,6 +165,7 @@ function M.new(deps)
     requestActions = requestActions,
     runVehicleAction = runVehicleAction,
     setPov = pov and setPov or nil,
+    cyclePovCamera = pov and function(client, offset) return pov.cycleCamera(client.ip, offset) end or nil,
   })
 
   local telemetry = telemetryModule.new({

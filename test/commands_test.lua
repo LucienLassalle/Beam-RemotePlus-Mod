@@ -11,6 +11,11 @@ local function setup(opts)
     switchVehicle = function(player, dir) calls.switch = dir return true end,
     cycleCamera = function(player, offset) calls.camera = offset return true end,
     setPov = opts.pov and function(_, quality) calls.pov = quality return true end or nil,
+    cyclePovCamera = opts.pov and function(_, offset)
+      if not opts.video then return nil end
+      calls.povCamera = offset
+      return true
+    end or nil,
     pulseButton = function(_, button) calls.button = button end,
     buttons = { shiftUp = 0, shiftDown = 1 },
     requestActions = function() calls.requested = true return true end,
@@ -106,6 +111,15 @@ t.describe('commands: special', function()
     local commands, client, _, calls = setup()
     commands.execute(client, 'cam_next')
     t.assertEquals(calls.camera, 1)
+  end)
+  t.it('cycles the camera of the point of view video instead, when on', function()
+    local commands, client, _, calls = setup({ pov = true, video = true })
+    commands.execute(client, 'cam_prev')
+    t.assertEquals(calls.povCamera, -1)
+    t.assertNil(calls.camera)
+    commands, client, _, calls = setup({ pov = true })
+    commands.execute(client, 'cam_prev')
+    t.assertEquals(calls.camera, -1)
   end)
   t.it('shifts with the virtual buttons', function()
     local commands, client, _, calls = setup()

@@ -138,9 +138,10 @@ end
 -- Point of view video (pov.lua) ----------------------------------------------
 -- A hidden render view per phone, driven by a camera context of the game
 -- (0.40, the split-screen machinery): it follows the car of the phone's
--- player from the driver's seat, never drawn on the PC screen. The context
--- gets an input player of its own (POV_INPUT_PLAYER, counting down), so the
--- player keeps its own camera controls on the PC.
+-- player, starting from the driver's seat, never drawn on the PC screen. The
+-- context gets an input player of its own (POV_INPUT_PLAYER, counting down),
+-- so the player keeps its own camera on the PC, and the phone cycles the
+-- cameras of its video through that input player.
 
 local POV_INPUT_PLAYER = 63
 local POV_DIR = '/temp/'
@@ -158,6 +159,16 @@ local function povQuality(rv)
   s.vehicleDynamicReflectionsEnabled = false
   rv.settingsOverride = s
   rv.settingsOverrideEnabled = true
+end
+
+-- Seat cameras: the car's own dashboard is in view (not from the hood).
+local function isInsideCamera(name)
+  return name == 'driver' or (name ~= nil and name:find('^occupant%.') ~= nil)
+end
+
+local function povCameraName(view)
+  local state = core_camera.getContextCameraState(view.id)
+  return state and state.cam
 end
 
 local povViews = {
@@ -192,17 +203,27 @@ local povViews = {
   end,
   capture = function(view)
     -- The context starts on the car's default camera, and gets it back when
-    -- the car changes: the driver's seat camera is selected again.
+    -- the car changes: the camera of the video (the driver's seat of each
+    -- new car) is selected again.
     local now = os.clockhp()
     if now >= view.checkAt then
       view.checkAt = now + POV_CAMERA_CHECK_S
       local veh = getPlayerVehicle(view.player)
-      local driver = veh and core_camera.getDriverCameraNameById(veh:getID())
-      local state = driver and core_camera.getContextCameraState(view.id)
-      if state and state.cam ~= driver then core_camera.setContextCamera(view.id, driver) end
+      local vid = veh and veh:getID()
+      if vid ~= view.vid then
+        view.vid = vid
+        view.camera = vid and core_camera.getDriverCameraNameById(vid)
+      end
+      local current = view.camera and povCameraName(view)
+      if current and current ~= view.camera then core_camera.setContextCamera(view.id, view.camera) end
     end
     if not view.rv:saveToDisk(view.file) then return nil end
-    return readFile(view.file)
+    return readFile(view.file), isInsideCamera(view.camera)
+  end,
+  cycleCamera = function(view, offset)
+    core_camera.setVehicleCameraByIndexOffset(view.input, offset)
+    view.camera = povCameraName(view) or view.camera
+    return true
   end,
 }
 

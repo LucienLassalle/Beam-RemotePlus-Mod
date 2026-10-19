@@ -62,6 +62,7 @@ local function setup(opts)
       destroyView = function() env.povDestroyed = (env.povDestroyed or 0) + 1 end,
       setActive = function() end,
       capture = function() return 'JPEG', false end,
+      cycleCamera = function(_, offset) env.povCamera = offset return true end,
     } or nil,
     getMods = function() return env.mods end,
     fileExists = function() return false end,
@@ -656,13 +657,16 @@ t.describe('server: point of view video', function()
     t.assertTrue(offered(setup({ pov = true })))
     t.assertFalse(offered(setup()))
   end)
-  t.it('changes quality', function()
+  t.it('changes quality, and the camera buttons change the camera of the video', function()
     local env = setup({ pov = true })
     connect(env)
     env.server.onInputBindingsChanged({ ['vinput' .. env.server.clients.get('10.0.0.2').deviceInst] = 0 })
     env.transport.push('cmd|pov|high', '10.0.0.2')
     env.server.update()
     t.assertEquals(env.povWidth, 1280)
+    env.transport.push('cmd|cam_next', '10.0.0.2')
+    env.server.update()
+    t.assertEquals(env.povCamera, 1)
   end)
   t.it('frees the views when the mod stops', function()
     local env = setup({ pov = true })

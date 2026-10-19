@@ -107,6 +107,7 @@ deps:
   runVehicleAction(client, name, value) -> ok, err   a vehicle's own action
   setPov(client, quality) -> ok, err     optional, starts the point of view video
                                          ('low', 'medium', 'high', true = default) or stops it (false)
+  cyclePovCamera(client, offset) -> ok, err, or nil when the phone has no video
 ]]
 function M.new(deps)
   local self = {}
@@ -120,6 +121,16 @@ function M.new(deps)
     return true
   end
 
+  -- With the point of view video on, the camera buttons of the phone change
+  -- the camera of its video, not the PC's.
+  local function cycleCamera(client, offset)
+    if deps.cyclePovCamera then
+      local ok, err = deps.cyclePovCamera(client, offset)
+      if ok ~= nil then return ok, err end
+    end
+    return deps.cycleCamera(client.player or 0, offset)
+  end
+
   local special = {
     next_vehicle = function(client)
       local ok, err = deps.switchVehicle(client.player or 0, 1)
@@ -131,8 +142,8 @@ function M.new(deps)
       if ok then client.forceEmit = true end
       return ok, err
     end,
-    cam_next = function(client) return deps.cycleCamera(client.player or 0, 1) end,
-    cam_prev = function(client) return deps.cycleCamera(client.player or 0, -1) end,
+    cam_next = function(client) return cycleCamera(client, 1) end,
+    cam_prev = function(client) return cycleCamera(client, -1) end,
     gear_up = function(client) deps.pulseButton(client, deps.buttons.shiftUp) return true end,
     gear_down = function(client) deps.pulseButton(client, deps.buttons.shiftDown) return true end,
     skeleton = function(client) return runOnVehicle(client, M.SKELETON_REQUEST) end,
