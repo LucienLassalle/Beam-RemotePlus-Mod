@@ -162,7 +162,7 @@ function M.new(deps)
   -- Colour of the player of a driving phone, as the game shows it above its
   -- car in local multiplayer; nil for a second screen or while unassigned.
   local function colorOf(client)
-    if client.display or client.player == nil or not deps.playerColor then return nil end
+    if client.display or client.player == nil or client.player < 0 or not deps.playerColor then return nil end
     local ok, color = pcall(deps.playerColor, client.player)
     return ok and color or nil
   end

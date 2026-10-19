@@ -587,6 +587,9 @@ t.describe('server: player colours', function()
     local env = setup()
     connect(env)
     t.assertNil(env.server.state().phones[1].color)
+    -- Local multiplayer without a player for the phone yet (0.40).
+    env.server.onInputBindingsChanged({ ['vinput' .. env.server.clients.get('10.0.0.2').deviceInst] = -1 })
+    t.assertNil(env.server.state().phones[1].color)
     env.transport.push(protocol.buildPingMessage(CODE, 2, 'Tab', 'display'), '10.0.0.7')
     env.server.update()
     for _, phone in ipairs(env.server.state().phones) do

@@ -65,15 +65,14 @@ local function getHostAddress()
   return ok and address or nil
 end
 
--- Colour of a player (0-based), the same as the game's multiseat name tags
--- above the cars (render/playerTags.lua): red, blue, yellow, green...
+-- Colour of a player (0-based), the one the game tints its name tag above
+-- the car with: since 0.40, the colour of its persona (core_multiseat).
 local function playerColor(player)
-  local ok, tags = pcall(require, 'ge/extensions/render/playerTags')
-  if not ok or type(tags) ~= 'table' or type(tags.color) ~= 'function' then return nil end
-  local rgb = tags.color(player + 1, math.max(player + 1, 1))
-  if type(rgb) ~= 'table' then return nil end
-  local function chan(x) return math.max(0, math.min(255, math.floor((tonumber(x) or 0) * 255 + 0.5))) end
-  return string.format('#%02x%02x%02x', chan(rgb[1]), chan(rgb[2]), chan(rgb[3]))
+  local multiseat = extensions.core_multiseat
+  if not (multiseat and multiseat.getParticipant) then return nil end
+  local participant = multiseat.getParticipant(player)
+  local hex = participant and participant.persona and participant.persona.colorHex
+  return type(hex) == 'string' and hex or nil
 end
 
 local function getVehicle(player)
