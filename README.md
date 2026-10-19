@@ -111,9 +111,16 @@ phone's own hotspot:
 | UDP **4446** | the mod | discovery, ping, controls, commands |
 | UDP **4444** | the game's own remote control (`core_remoteController`), opened by the mod; pairs no new phone while they are locked out | the app's pairing handshake |
 
-The mod answers each phone on the address the request came from. The ports
-used on the phone are described in the
-[app README](https://github.com/LucienLassalle/Beam-RemotePlus-Mobile#network).
+The mod answers each phone on the address the request came from, on two
+UDP ports of the phone:
+
+| Port (on the phone) | Sent by | Carries |
+|---|---|---|
+| UDP **4447** | the mod | hello, pong, telemetry, events |
+| UDP **4448** | the game's video streaming, started by the mod | point of view video (H.264), only while the phone asks for it |
+
+The app README describes the
+[ports of the phone](https://github.com/LucienLassalle/Beam-RemotePlus-Mobile#network).
 
 ```mermaid
 flowchart LR
@@ -124,7 +131,8 @@ flowchart LR
         mod -- "reads the pairing code" --> native
     end
     phone -- "discovery, ping,<br/>controls, commands" --> mod
-    mod -- "hello, pong,<br/>telemetry, events,<br/>point of view video" --> phone
+    mod -- "hello, pong,<br/>telemetry, events<br/>(to UDP 4447)" --> phone
+    mod -- "point of view video<br/>(to UDP 4448)" --> phone
     phone -- "pairing handshake" --> native
 ```
 
@@ -143,6 +151,9 @@ flowchart LR
   ```powershell
   New-NetFirewallRule -DisplayName "Beam-RemotePlus" -Direction Inbound -Protocol UDP -LocalPort 4444,4446 -Action Allow
   ```
+
+  UDP 4447 and 4448 are ports of the phone: the PC only sends to them, no
+  rule is needed for them.
 
   With the phone's connection shared over USB (USB tethering), Windows sees
   a new network, usually classified as **Public**: the rule above covers
