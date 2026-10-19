@@ -75,6 +75,18 @@ local function playerColor(player)
   return type(hex) == 'string' and hex or nil
 end
 
+-- Local multiplayer since 0.40: joins the phone's device as the next free
+-- player, like the game's split-screen setup does, then lets the game seat
+-- that player in a car (the device rescan does).
+local function joinPlayer(client)
+  local multiseat = extensions.core_multiseat
+  if not (multiseat and multiseat.cycleDevicePlayer) then return false, 'unavailable:multiseat' end
+  if multiseat.isConfigurationEditActive and multiseat.isConfigurationEditActive() then return false, 'setup_open' end
+  if not multiseat.cycleDevicePlayer('vinput' .. client.deviceInst) then return false, 'refused' end
+  if core_input_bindings and core_input_bindings.onDeviceChanged then core_input_bindings.onDeviceChanged() end
+  return true
+end
+
 local function getVehicle(player)
   if type(getPlayerVehicle) ~= 'function' then return nil end
   return getPlayerVehicle(player)
@@ -140,6 +152,7 @@ local function createServer()
     getHostLabel = getHostLabel,
     getHostAddress = getHostAddress,
     playerColor = playerColor,
+    joinPlayer = joinPlayer,
     getVehicle = getVehicle,
     listVehicles = listVehicles,
     switchVehicle = switchVehicle,

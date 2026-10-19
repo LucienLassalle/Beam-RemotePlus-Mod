@@ -18,6 +18,7 @@ M.FALLBACK = {
   ['beamRemotePlus.toast.unlocked'] = 'New phones can connect again',
   ['beamRemotePlus.toast.nativeOpen'] = 'The game remote control (UDP 4444) could not be locked: new phones can still pair through it',
   ['beamRemotePlus.toast.phoneKicked'] = 'Phone kicked: {device}',
+  ['beamRemotePlus.toast.noPlayer'] = '{device} has no player: add it in the local multiplayer setup',
   ['beamRemotePlus.label.host'] = "{name}'s PC",
 }
 

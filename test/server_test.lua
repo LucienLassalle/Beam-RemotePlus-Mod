@@ -50,6 +50,12 @@ local function setup(opts)
     switchVehicle = function() return true end,
     cycleCamera = function() return true end,
     onDeviceCreated = function() env.rescans = env.rescans + 1 end,
+    joinPlayer = function(client)
+      env.joins = (env.joins or 0) + 1
+      if opts.cannotJoin then return false, 'setup_open' end
+      env.server.onInputBindingsChanged({ ['vinput' .. client.deviceInst] = 1 })
+      return true
+    end,
     nativeRemote = env.native,
     getMods = function() return env.mods end,
     fileExists = function() return false end,
@@ -613,6 +619,46 @@ t.describe('server: player colours', function()
     for _, phone in ipairs(env.server.state().phones) do
       if phone.display then t.assertNil(phone.color) end
     end
+  end)
+end)
+
+t.describe('server: local players (0.40)', function()
+  t.it('joins a phone left without a player, on the next frame', function()
+    local env = setup()
+    connect(env)
+    local client = env.server.clients.get('10.0.0.2')
+    env.server.onInputBindingsChanged({ ['vinput' .. client.deviceInst] = -1 })
+    t.assertNil(env.joins)
+    env.server.update()
+    t.assertEquals(env.joins, 1)
+    t.assertEquals(client.player, 1)
+  end)
+  t.it('joins it only once: the player may take it out of the game', function()
+    local env = setup()
+    connect(env)
+    local client = env.server.clients.get('10.0.0.2')
+    env.server.onInputBindingsChanged({ ['vinput' .. client.deviceInst] = -1 })
+    env.server.update()
+    env.server.onInputBindingsChanged({ ['vinput' .. client.deviceInst] = -1 })
+    env.server.update()
+    t.assertEquals(env.joins, 1)
+  end)
+  t.it('tells the player when the phone cannot join', function()
+    local env = setup({ cannotJoin = true })
+    connect(env)
+    local client = env.server.clients.get('10.0.0.2')
+    env.server.onInputBindingsChanged({ ['vinput' .. client.deviceInst] = -1 })
+    env.server.update()
+    t.assertEquals(env.toasts[#env.toasts].kind, 'warning')
+    t.assertContains(env.toasts[#env.toasts].text, 'Pixel')
+  end)
+  t.it('leaves phones with a player alone', function()
+    local env = setup()
+    connect(env)
+    local client = env.server.clients.get('10.0.0.2')
+    env.server.onInputBindingsChanged({ ['vinput' .. client.deviceInst] = 0 })
+    env.server.update()
+    t.assertNil(env.joins)
   end)
 end)
 

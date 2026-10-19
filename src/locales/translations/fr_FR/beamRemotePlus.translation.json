@@ -9,6 +9,7 @@
   "beamRemotePlus.toast.unlocked": "Les nouveaux téléphones peuvent de nouveau se connecter",
   "beamRemotePlus.toast.nativeOpen": "Impossible de bloquer la télécommande du jeu (UDP 4444) : de nouveaux téléphones peuvent encore s'y appairer",
   "beamRemotePlus.toast.phoneKicked": "Téléphone exclu : {device}",
+  "beamRemotePlus.toast.noPlayer": "{device} n'a pas de joueur : l'ajouter dans la configuration du multijoueur local",
   "beamRemotePlus.label.host": "PC de {name}",
   "beamRemotePlus.app.name": "Beam-RemotePlus",
   "beamRemotePlus.app.description": "Contrôle par téléphone (application Android Beam-RemotePlus nécessaire) : code d'appairage, blocage des nouveaux téléphones et joueurs connectés, que l'on peut exclure",

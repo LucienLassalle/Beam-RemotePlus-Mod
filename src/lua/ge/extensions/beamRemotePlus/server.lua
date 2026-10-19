@@ -58,6 +58,8 @@ deps:
   switchVehicle(player, dir)  -> ok, err
   cycleCamera(player, offset) -> ok, err
   onDeviceCreated()           optional, forces an input device rescan
+  joinPlayer(client)          optional, joins the phone to the local players
+                              (it had none, 0.40 multiseat) -> ok, err
   getMods()                   optional, core_modmanager.getMods()
   fileExists(path)            optional, file in the game's virtual file system
   nativeRemote                optional nativeRemote.new(...) instance: the
@@ -94,6 +96,9 @@ function M.new(deps)
   -- the panel (greyed out), and what it last showed of every phone.
   local gone = {}
   local lastStatuses = ''
+
+  -- Phones to join to the local players on the next frame (ips).
+  local pendingJoins = {}
 
   local function send(client, payload)
     deps.transport.send(payload, client.ip, protocol.CLIENT_PORT)
@@ -418,6 +423,13 @@ function M.new(deps)
     for _, client in ipairs(clients.assignPlayers(players)) do
       log.info('phone ' .. client.deviceName .. ' assigned to player ' .. tostring(client.player))
       sendSession(client)
+      -- Local multiplayer since 0.40: a new device has no player (-1) until
+      -- it joins. A phone joins once, as the next free player, like every
+      -- device did before; the player may still take it out of the game.
+      if client.player == -1 and not client.joinTried and deps.joinPlayer then
+        client.joinTried = true
+        pendingJoins[#pendingJoins + 1] = client.ip
+      end
     end
     publish()
   end
@@ -512,6 +524,23 @@ function M.new(deps)
       log.info('phone left: ' .. client.deviceName .. ' (' .. client.ip .. ')')
       deps.notify(deps.i18n.t('beamRemotePlus.toast.phoneDisconnected', { device = client.deviceName }), 'warning')
       publish()
+    end
+
+    -- Joined here, not from inside the game's onInputBindingsChanged hook:
+    -- joining assigns the device again, which fires that hook.
+    local joins = pendingJoins
+    pendingJoins = {}
+    for _, ip in ipairs(joins) do
+      local client = clients.get(ip)
+      if client and client.player == -1 then
+        local ok, joined, err = pcall(deps.joinPlayer, client)
+        if ok and joined then
+          log.info('phone ' .. client.deviceName .. ' joined the local players')
+        else
+          log.warn('phone ' .. client.deviceName .. ' could not join the local players: ' .. tostring(ok and err or joined))
+          deps.notify(deps.i18n.t('beamRemotePlus.toast.noPlayer', { device = client.deviceName }), 'warning')
+        end
+      end
     end
 
     for _ = 1, M.MAX_PACKETS_PER_FRAME do

@@ -36,7 +36,8 @@ longer maintained.
   vehicle mods), as listed in Options > Controls.
 - In-game panel: connected players, lock out new phones, kick a phone.
 - Second-screen phones (display only) and local multiplayer (one phone per
-  player).
+  player): a phone joins as the next free player, which the game's local
+  multiplayer setup can then move or remove.
 - English and French.
 
 ## Requirements
