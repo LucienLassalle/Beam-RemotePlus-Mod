@@ -352,9 +352,10 @@ function M.new(deps)
 
   local function sendSession(client)
     if client.version < 2 then return end
+    client.sentColor = colorOf(client)
     send(client, protocol.buildSessionMessage({
       modVersion = M.VERSION, player = client.player, commands = commands.names(),
-      playerColor = colorOf(client),
+      playerColor = client.sentColor,
       optionalMods = optionalMods.states(),
     }))
   end
@@ -418,6 +419,15 @@ function M.new(deps)
       log.info('phone ' .. client.deviceName .. ' assigned to player ' .. tostring(client.player))
       sendSession(client)
     end
+    publish()
+  end
+
+  -- The local players changed (0.40 personas): a player may have picked
+  -- another colour, its phone is told.
+  function self.onParticipantsChanged()
+    clients.each(function(_, client)
+      if colorOf(client) ~= client.sentColor then sendSession(client) end
+    end)
     publish()
   end
 

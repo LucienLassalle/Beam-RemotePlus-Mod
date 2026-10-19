@@ -45,7 +45,7 @@ local function setup(opts)
     getSecurityCode = function() if opts.noCode then return nil end return CODE end,
     getHostLabel = function() return "Test's PC" end,
     getHostAddress = function() return '192.168.1.20' end,
-    playerColor = function(player) return ({ '#f21a1a', '#2673ff' })[player + 1] end,
+    playerColor = function(player) return (env.colors or { '#f21a1a', '#2673ff' })[player + 1] end,
     getVehicle = function() return env.vehicle end,
     switchVehicle = function() return true end,
     cycleCamera = function() return true end,
@@ -582,6 +582,24 @@ t.describe('server: player colours', function()
     local session
     for _, s in ipairs(env.transport.sent) do if s.payload:find('"type":"session"', 1, true) then session = s.payload end end
     t.assertContains(session, '"playerColor":"#2673ff"')
+  end)
+  t.it('tells the phone when its player picks another colour', function()
+    local env = setup()
+    connect(env)
+    local client = env.server.clients.get('10.0.0.2')
+    env.server.onInputBindingsChanged({ ['vinput' .. client.deviceInst] = 0 })
+    local function sessions()
+      local n = 0
+      for _, s in ipairs(env.transport.sent) do if s.payload:find('"type":"session"', 1, true) then n = n + 1 end end
+      return n
+    end
+    local before = sessions()
+    env.server.onParticipantsChanged()
+    t.assertEquals(sessions(), before)
+    env.colors = { '#00ff00' }
+    env.server.onParticipantsChanged()
+    t.assertEquals(sessions(), before + 1)
+    t.assertContains(env.transport.sent[#env.transport.sent].payload, '"playerColor":"#00ff00"')
   end)
   t.it('has no colour while unassigned or for a second screen', function()
     local env = setup()

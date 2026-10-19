@@ -182,6 +182,13 @@ local function onInputBindingsChanged(players)
   if not ok then logger.warn('onInputBindingsChanged ignored: ' .. tostring(err)) end
 end
 
+-- A local player joined, left or edited its persona (name, colour).
+local function onLocalParticipantsChanged()
+  if not server then return end
+  local ok, err = pcall(server.onParticipantsChanged)
+  if not ok then logger.warn('players refresh failed: ' .. tostring(err)) end
+end
+
 -- The mod manager finished loading, or a mod was enabled, disabled,
 -- installed or removed: the optional mods may have changed.
 local function onModsChanged()
@@ -226,6 +233,7 @@ M.onExtensionLoaded = onExtensionLoaded
 M.onExtensionUnloaded = onExtensionUnloaded
 M.onUpdate = onUpdate
 M.onInputBindingsChanged = onInputBindingsChanged
+M.onLocalParticipantsChanged = onLocalParticipantsChanged
 M.onModManagerReady = onModsChanged
 M.onModActivated = onModsChanged
 M.onModDeactivated = onModsChanged
