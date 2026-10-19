@@ -58,9 +58,10 @@ local function setup(opts)
     end,
     nativeRemote = env.native,
     povViews = opts.pov and {
-      createView = function(id, player) return { id = id, player = player } end,
+      createView = function(id, player, w) env.povWidth = w return { id = id, player = player } end,
       destroyView = function() env.povDestroyed = (env.povDestroyed or 0) + 1 end,
-      capture = function() return 'JPEG' end,
+      setActive = function() end,
+      capture = function() return 'JPEG', false end,
     } or nil,
     getMods = function() return env.mods end,
     fileExists = function() return false end,
@@ -635,7 +636,8 @@ t.describe('server: point of view video', function()
     env.server.onInputBindingsChanged({ ['vinput' .. client.deviceInst] = 0 })
     env.transport.push('cmd|pov|1', '10.0.0.2')
     env.server.update()
-    env.server.onPreRender()
+    env.server.onPreRender() -- renders
+    env.server.onPreRender() -- captures
     local frames = 0
     for _, s in ipairs(env.transport.sent) do if s.port == 4448 then frames = frames + 1 end end
     t.assertEquals(frames, 1)
@@ -653,6 +655,14 @@ t.describe('server: point of view video', function()
     end
     t.assertTrue(offered(setup({ pov = true })))
     t.assertFalse(offered(setup()))
+  end)
+  t.it('changes quality', function()
+    local env = setup({ pov = true })
+    connect(env)
+    env.server.onInputBindingsChanged({ ['vinput' .. env.server.clients.get('10.0.0.2').deviceInst] = 0 })
+    env.transport.push('cmd|pov|high', '10.0.0.2')
+    env.server.update()
+    t.assertEquals(env.povWidth, 1280)
   end)
   t.it('frees the views when the mod stops', function()
     local env = setup({ pov = true })

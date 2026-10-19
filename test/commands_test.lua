@@ -10,6 +10,7 @@ local function setup(opts)
     getVehicle = function(player) calls.player = player return not opts.noVehicle and vehicle or nil end,
     switchVehicle = function(player, dir) calls.switch = dir return true end,
     cycleCamera = function(player, offset) calls.camera = offset return true end,
+    setPov = opts.pov and function(_, quality) calls.pov = quality return true end or nil,
     pulseButton = function(_, button) calls.button = button end,
     buttons = { shiftUp = 0, shiftDown = 1 },
     requestActions = function() calls.requested = true return true end,
@@ -254,5 +255,20 @@ t.describe('commands: handbrake', function()
     t.assertContains(vehicle.commands[1], "input.event('parkingbrake', 1, -1)")
     t.assertTrue(commands.execute(client, 'handbrake', '0'))
     t.assertContains(vehicle.commands[2], "input.event('parkingbrake', 0, -1)")
+  end)
+end)
+
+t.describe('commands: point of view video', function()
+  t.it('starts with the default quality, a given one, or stops', function()
+    local commands, client, _, calls = setup({ pov = true })
+    t.assertTrue(commands.execute(client, 'pov', '1'))
+    t.assertEquals(calls.pov, true)
+    t.assertTrue(commands.execute(client, 'pov', 'high'))
+    t.assertEquals(calls.pov, 'high')
+    t.assertTrue(commands.execute(client, 'pov', '0'))
+    t.assertEquals(calls.pov, false)
+    local ok, err = commands.execute(client, 'pov', 'ultra')
+    t.assertFalse(ok)
+    t.assertEquals(err, commandsModule.ERR_BAD_ARGUMENT)
   end)
 end)

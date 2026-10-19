@@ -187,6 +187,9 @@ local povViews = {
     povInputs[view.input] = nil
     FS:removeFile(view.file)
   end,
+  setActive = function(view, on)
+    view.rv.active = on
+  end,
   capture = function(view)
     -- The context starts on the car's default camera, and gets it back when
     -- the car changes: the driver's seat camera is selected again.

@@ -11,6 +11,7 @@
 --          released automatically when the phone disconnects.
 
 local vehicleActions = require('/lua/ge/extensions/beamRemotePlus/vehicleActions')
+local povModule = require('/lua/ge/extensions/beamRemotePlus/pov')
 
 local M = {}
 
@@ -104,7 +105,8 @@ deps:
   buttons = { shiftUp = n, shiftDown = n }
   requestActions(client) -> ok, err      lists the "More" commands (answered later)
   runVehicleAction(client, name, value) -> ok, err   a vehicle's own action
-  setPov(client, on) -> ok, err          optional, starts or stops the point of view video
+  setPov(client, quality) -> ok, err     optional, starts the point of view video
+                                         ('low', 'medium', 'high', true = default) or stops it (false)
 ]]
 function M.new(deps)
   local self = {}
@@ -145,8 +147,10 @@ function M.new(deps)
 
   -- Point of view video (pov.lua), only offered when the game can do it.
   if deps.setPov then
+    -- arg: 0 = off, 1 = on (default quality), or a quality.
     special.pov = function(client, arg)
       local on = M.parseHoldArg(arg)
+      if on == nil and povModule.QUALITIES[arg] then on = arg end
       if on == nil then return false, M.ERR_BAD_ARGUMENT end
       return deps.setPov(client, on)
     end

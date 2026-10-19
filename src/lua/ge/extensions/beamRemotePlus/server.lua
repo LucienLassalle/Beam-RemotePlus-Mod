@@ -66,7 +66,7 @@ deps:
   nativeRemote                optional nativeRemote.new(...) instance: the
                               game's own remote control (UDP 4444)
   listVehicleActions(model)   optional, the vehicle's own actions (vehicleActions.vehicleEntries)
-  povViews                    optional { createView, destroyView, capture }: the
+  povViews                    optional { createView, destroyView, setActive, capture }: the
                               game's hidden views for the point of view video (pov.lua)
   runVehicleAction(vehicle, name, value)  optional, runs one of them -> ok, err
 ]]
@@ -134,18 +134,24 @@ function M.new(deps)
   local pov = deps.povViews and povModule.new({
     createView = deps.povViews.createView,
     destroyView = deps.povViews.destroyView,
+    setActive = deps.povViews.setActive,
     capture = deps.povViews.capture,
     send = function(payload, ip, port) deps.transport.send(payload, ip, port) end,
     clock = deps.clock,
   }) or nil
 
-  local function setPov(client, on)
-    if not on then
+  -- quality: false = off, true = default, else a quality of pov.lua.
+  local function setPov(client, quality)
+    if not quality then
       if pov.stop(client.ip) then log.info('point of view video stopped for ' .. client.deviceName) end
       return true
     end
-    local ok, err = pov.start(client)
-    if ok then log.info('point of view video for ' .. client.deviceName .. ' (player ' .. tostring(client.player) .. ')') end
+    quality = quality ~= true and quality or nil
+    local ok, err = pov.start(client, quality)
+    if ok then
+      log.info('point of view video for ' .. client.deviceName .. ' (player ' .. tostring(client.player) .. ', '
+        .. (quality or povModule.DEFAULT_QUALITY) .. ')')
+    end
     return ok, err
   end
 
