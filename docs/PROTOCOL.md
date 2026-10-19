@@ -6,6 +6,7 @@ All messages are UDP datagrams on the local network.
 |---|---|---|
 | phone → PC | **4446** | discovery probe, ping, control packets, commands |
 | PC → phone | **4447** | hello, pong, telemetry, events |
+| PC → phone | **4448** | point of view video frames (section 6, BeamNG.drive 0.40 or newer) |
 
 The game's native remote control (`core_remoteController`, UDP 4444)
 provides the **pairing code**: the mod reuses its 5-digit code. Its port
@@ -47,7 +48,7 @@ PC    → phone     beamremoteplus|pong|<code>|<negotiated version>
 - `<role>` (optional): `controller` (default) or `display`.
 - `display` (optional): **second screen**. The phone gets the telemetry of
   player 1 but no virtual input device, its control packets are ignored and
-  every command except `debug` and `skeleton` is refused with `display_only`. A phone that
+  every command except `debug`, `skeleton` and `pov` is refused with `display_only`. A phone that
   changes role starts a new session.
 - `<app version>` (optional, after the role): release version of the app
   (`0.0.5`, `0.0.5-0.39`, the version given to the build).
@@ -114,6 +115,7 @@ cmd|<name>|1 / |0     hold commands (pressed / released)
 | `cam_next`, `cam_prev` | press | camera |
 | `debug` | hold | `1` = acknowledge every command, `0` = errors only |
 | `skeleton` | press | sends the skeleton of the vehicle (`skeleton` messages below) |
+| `pov` | hold | `1` = start the point of view video of the phone (section 6), `0` = stop it. Listed in the session `commands` only when the game can do it; fails with `no_player` while the phone has no player |
 | `leave` | press | the player disconnects on purpose: the car is stopped like after a lost signal (watchdog above), then the phone is disconnected once the handbrake holds it (a second screen at once); never acknowledged |
 | `actions` | press | lists the commands of the "More" sheet for the vehicle (`actions` message below) |
 | `action\|<id>` | press | runs one of them (pressed then released) |
@@ -270,3 +272,25 @@ Nine little-endian `float32`: speed (m/s), rpm, redline rpm, gear (0 = R,
 1 = N, 2+ = gear + 1), fuel (0..1), water temperature, lights bitmask (1 low
 beam, 2 high beam, 4 handbrake, 8 left, 16 right, 32 oil, 64 ABS, 128 TC),
 shift light (0/1), oil temperature.
+
+## 6. Point of view video (BeamNG.drive 0.40 or newer)
+
+After `cmd|pov|1`, the mod renders the view from the driver's seat of the
+car of the phone's player (a hidden view of the game, never drawn on the PC
+screen; the player keeps its own camera on the PC) and sends its frames to
+the phone, port **4448**, one datagram per frame:
+
+```
+"BRPV" | frame number (uint32, big endian) | JPEG image
+```
+
+- Up to 30 frames per second, never two game frames in a row (the video
+  slows down with the game), 640×360 (512×288, then 426×240 when a frame
+  would not fit a datagram). Frame numbers grow by one: a gap is a lost
+  frame, an older number a late one (drop it).
+- The video follows the phone: another player, another car. It stops with
+  `cmd|pov|0`, when the phone disconnects or loses its player.
+- Each video costs the game an extra render of the world (at reduced detail,
+  like a split-screen view) and a JPEG capture. The first capture of a game
+  frame waits for the graphics card, so all the phones are captured in the
+  same game frame.
