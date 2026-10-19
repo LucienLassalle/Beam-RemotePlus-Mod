@@ -6,6 +6,7 @@ All messages are UDP datagrams on the local network.
 |---|---|---|
 | phone → PC | **4446** | discovery probe, ping, control packets, commands |
 | PC → phone | **4447** | hello, pong, telemetry, events |
+| PC → phone | **4448** | point of view video, H.264 in MPEG-TS (section 6, BeamNG.drive 0.40 or newer) |
 
 The game's native remote control (`core_remoteController`, UDP 4444)
 provides the **pairing code**: the mod reuses its 5-digit code. Its port
@@ -47,7 +48,7 @@ PC    → phone     beamremoteplus|pong|<code>|<negotiated version>
 - `<role>` (optional): `controller` (default) or `display`.
 - `display` (optional): **second screen**. The phone gets the telemetry of
   player 1 but no virtual input device, its control packets are ignored and
-  every command except `debug` and `skeleton` is refused with `display_only`. A phone that
+  every command except `debug`, `skeleton` and `pov` is refused with `display_only`. A phone that
   changes role starts a new session.
 - `<app version>` (optional, after the role): release version of the app
   (`0.0.5`, `0.0.5-0.39`, the version given to the build).
@@ -111,9 +112,10 @@ cmd|<name>|1 / |0     hold commands (pressed / released)
 | `pit_limiter` | press | pit limiter on / off on the fr04 vehicle mods (F4, CF26) |
 | `gear_up`, `gear_down` | press | sequential shift |
 | `next_vehicle`, `prev_vehicle` | press | switch vehicle (player's own) |
-| `cam_next`, `cam_prev` | press | camera |
+| `cam_next`, `cam_prev` | press | camera (of the point of view video instead while the phone has it, section 6) |
 | `debug` | hold | `1` = acknowledge every command, `0` = errors only |
 | `skeleton` | press | sends the skeleton of the vehicle (`skeleton` messages below) |
+| `pov` | press | `720p60`, `1080p30` or `1080p60` = start the point of view video of the phone in that quality (section 6), `1` = in the default one (`720p60`), `0` = stop it. Listed in the session `commands` only when the game can do it; fails with `no_player` while the phone has no player |
 | `leave` | press | the player disconnects on purpose: the car is stopped like after a lost signal (watchdog above), then the phone is disconnected once the handbrake holds it (a second screen at once); never acknowledged |
 | `actions` | press | lists the commands of the "More" sheet for the vehicle (`actions` message below) |
 | `action\|<id>` | press | runs one of them (pressed then released) |
@@ -246,6 +248,21 @@ phone may pair again later, unless new phones are locked out.
 {"type":"kicked"}
 ```
 
+**`pov`**: state of the point of view video of the phone (section 6), sent
+when the video starts and each time its state or camera changes:
+
+```json
+{"type":"pov","state":"live","inside":true,"quality":"720p60"}
+{"type":"pov","state":"error","error":"encoder","quality":"720p60"}
+```
+
+- `state`: `starting` (the encoder is being set up), `live` (frames are
+  flowing to port 4448) or `error` (no video, the mod stopped it).
+- `error` (with `error` only): `encoder`, the video encoder of the
+  graphics card did not start (see section 6).
+- `inside`: the camera is a seat camera (driver or passenger), the car's
+  own dashboard is in view.
+
 **`actions`**: answer to `cmd|actions`, the commands of the vehicle the
 phone drives, beyond the dashboard buttons:
 
@@ -270,3 +287,43 @@ Nine little-endian `float32`: speed (m/s), rpm, redline rpm, gear (0 = R,
 1 = N, 2+ = gear + 1), fuel (0..1), water temperature, lights bitmask (1 low
 beam, 2 high beam, 4 handbrake, 8 left, 16 right, 32 oil, 64 ABS, 128 TC),
 shift light (0/1), oil temperature.
+
+## 6. Point of view video (BeamNG.drive 0.40 or newer)
+
+After `cmd|pov|<quality>`, the mod renders the view of the car of the
+phone's player from its driver's seat (a hidden view of the game, never
+drawn on the PC screen; the player keeps its own camera on the PC). The
+game's own video streaming (libbngvs, 0.40) encodes it with the video
+encoder of the graphics card, straight from the GPU, and sends it to the
+phone, port **4448**:
+
+- H.264 (High profile), Annex-B, in MPEG-TS, 1316 bytes of TS per UDP
+  datagram (7 packets of 188 bytes). No audio.
+- A keyframe (IDR, SPS/PPS inline) each second: after a lost datagram,
+  wait for the next one.
+- `pov` messages (section 5) tell the phone its state and camera.
+
+| Quality | Image | Frames per second | Bitrate | Game, 60 fps without video |
+|---|---|---|---|---|
+| `720p60` (default, `1`) | 1280×720 | 60 | 8 Mbit/s | 58 fps |
+| `1080p30` | 1920×1080 | 30 | 10 Mbit/s | 60 fps |
+| `1080p60` | 1920×1080 | 60 | 16 Mbit/s | 59 fps |
+
+Measured on BeamNG.drive 0.40, 1440p, Radeon RX 6800 XT (Vulkan video
+encoder). The video never runs faster than the game.
+
+- The encoder runs one frame behind the game (`async_depth=2`): with the
+  library's default the game waits for every encode (60 fps fell to 27).
+- No encoder, no video: the encoder is NVENC (Nvidia), AMF (AMD) or
+  QuickSync (Intel) with the DirectX 11/12 renderer, Vulkan video with the
+  Vulkan renderer (on Linux, a Mesa build with H.264 encoding, such as
+  Fedora's `mesa-vulkan-drivers-freeworld`). When it does not start, the
+  phone gets `{"type":"pov","state":"error","error":"encoder"}` and the
+  game log has the reason (`videoStream` lines).
+- While the phone has the video, `cam_next` / `cam_prev` cycle the cameras
+  of its video, not the PC's, driver's seat included. Another car brings
+  the driver's seat back.
+- The video follows the phone: another player, another car. It stops with
+  `cmd|pov|0`, when the phone disconnects or loses its player.
+- Each video costs the game an extra render of the world, at reduced detail
+  like a split-screen view.

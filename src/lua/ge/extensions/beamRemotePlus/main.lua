@@ -6,7 +6,7 @@
 
 local MODULE_DIR = '/lua/ge/extensions/beamRemotePlus/'
 local SIBLINGS = { 'json', 'protocol', 'config', 'i18n', 'logger', 'clients',
-  'vehicleActions', 'commands', 'radar', 'telemetry', 'transport', 'nativeRemote', 'version', 'optionalMods', 'server' }
+  'vehicleActions', 'commands', 'radar', 'telemetry', 'transport', 'nativeRemote', 'version', 'optionalMods', 'pov', 'server' }
 
 -- require() caches by path independently of extensions.reload(): without
 -- this, reloading the mod would keep running stale sibling modules.
@@ -20,6 +20,7 @@ local nativeRemoteModule = require(MODULE_DIR .. 'nativeRemote')
 local serverModule = require(MODULE_DIR .. 'server')
 local radar = require(MODULE_DIR .. 'radar')
 local vehicleActions = require(MODULE_DIR .. 'vehicleActions')
+local povModule = require(MODULE_DIR .. 'pov')
 
 local M = {}
 
@@ -135,6 +136,118 @@ local function runVehicleAction(vehicle, name, value)
   return true
 end
 
+-- Point of view video (pov.lua) ----------------------------------------------
+-- A hidden render view per phone, driven by a camera context of the game
+-- (0.40, the split-screen machinery): it follows the car of the phone's
+-- player, starting from the driver's seat, never drawn on the PC screen. The
+-- context gets an input player of its own (POV_INPUT_PLAYER, counting down),
+-- so the player keeps its own camera on the PC, and the phone cycles the
+-- cameras of its video through that input player. The game's video
+-- streaming (libbngvs, 0.40) encodes the view on the graphics card and sends
+-- it to the phone.
+
+local POV_INPUT_PLAYER = 63
+local POV_CAMERA_CHECK_S = 1
+local povInputs = {} -- input players in use
+
+-- Same quality cut as split-screen views (render/splitScreen.lua): mirrors
+-- and dynamic reflections are each an extra render.
+local function povQuality(rv)
+  local ok, s = pcall(RenderSettings.getGlobals)
+  if not ok or not s then return end
+  s.meshDetailAdjust = s.meshDetailAdjust * 0.5
+  s.groundCoverScale = s.groundCoverScale * 0.5
+  s.vehicleMirrorsEnabled = false
+  s.vehicleDynamicReflectionsEnabled = false
+  rv.settingsOverride = s
+  rv.settingsOverrideEnabled = true
+end
+
+-- Seat cameras: the car's own dashboard is in view (not from the hood).
+local function isInsideCamera(name)
+  return name == 'driver' or (name ~= nil and name:find('^occupant%.') ~= nil)
+end
+
+local function povCameraName(view)
+  local state = core_camera.getContextCameraState(view.id)
+  return state and state.cam
+end
+
+-- Render views driven by camera contexts and the video streaming both
+-- arrived with 0.40.
+local function povAvailable()
+  return RenderViewManagerInstance ~= nil and core_camera ~= nil and core_camera.createContext ~= nil
+    and type(startNetworkOutput) == 'function'
+end
+
+local povViews = {
+  createView = function(id, player, width, height)
+    local input = POV_INPUT_PLAYER
+    while povInputs[input] do input = input - 1 end
+    local rv = RenderViewManagerInstance:getOrCreateView(id)
+    rv.luaOwned = true
+    rv.renderEditorIcons = false
+    rv.namedTexTargetColor = id
+    rv.resolution = Point2I(width, height)
+    rv.viewPort = RectI(0, 0, width, height)
+    rv.compositeRect = RectI(-2, -2, 2, 2) -- off the window: never composited on screen
+    rv.frustum = Frustum.construct(false, math.rad(70), width / height, 0.1, 2000)
+    povQuality(rv)
+    core_camera.createContext(id, id, input, player)
+    povInputs[input] = true
+    return { id = id, rv = rv, input = input, player = player, checkAt = 0 }
+  end,
+  destroyView = function(view)
+    core_camera.destroyContext(view.id)
+    RenderViewManagerInstance:destroyView(view.rv)
+    povInputs[view.input] = nil
+  end,
+  startOutput = function(view, url, quality)
+    local q = povModule.QUALITIES[quality]
+    -- source, url, container, fps, bitrate, with audio (0 = no), encoder options
+    local id = startNetworkOutput(view.id, url, 'mpegts', q.fps, q.bitrate, 0, povModule.encoderOptions(quality))
+    if not id then return nil, 'no_output' end
+    return id
+  end,
+  stopOutput = function(output)
+    stopNetworkOutput(output)
+  end,
+  outputStatus = function(output)
+    return getNetworkOutputStatus(output)
+  end,
+  update = function(view)
+    -- The context starts on the car's default camera, and gets it back when
+    -- the car changes: the camera of the video (the driver's seat of each
+    -- new car) is selected again.
+    local now = os.clockhp()
+    if now >= view.checkAt then
+      view.checkAt = now + POV_CAMERA_CHECK_S
+      local veh = getPlayerVehicle(view.player)
+      local vid = veh and veh:getID()
+      if vid ~= view.vid then
+        view.vid = vid
+        view.camera = vid and core_camera.getDriverCameraNameById(vid)
+      end
+      local current = view.camera and povCameraName(view)
+      if current and current ~= view.camera then core_camera.setContextCamera(view.id, view.camera) end
+    end
+    return isInsideCamera(view.camera)
+  end,
+  cycleCamera = function(view, offset)
+    local current = povCameraName(view)
+    core_camera.setVehicleCameraByIndexOffset(view.input, offset)
+    local order = {}
+    for _, config in ipairs(core_camera.getConfigurationReadOnly()) do
+      if config.enabled or config.name == 'driver' or config.name:find('^occupant%.') then order[#order + 1] = config.name end
+    end
+    local seat = view.vid and core_camera.getDriverCameraNameById(view.vid)
+    local camera = povModule.cycleWithSeat(order, current, povCameraName(view), seat, offset)
+    if camera and camera ~= povCameraName(view) then core_camera.setContextCamera(view.id, camera) end
+    view.camera = camera or view.camera
+    return true
+  end,
+}
+
 local function createServer()
   local config = configModule.new({ readJson = jsonReadFile, writeJson = jsonWriteFile })
   config.load()
@@ -159,6 +272,7 @@ local function createServer()
     cycleCamera = cycleCamera,
     listVehicleActions = listVehicleActions,
     runVehicleAction = runVehicleAction,
+    povViews = povAvailable() and povViews or nil,
     onDeviceCreated = function()
       if core_input_bindings and core_input_bindings.onDeviceChanged then core_input_bindings.onDeviceChanged() end
     end,

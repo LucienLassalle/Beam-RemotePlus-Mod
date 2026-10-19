@@ -7,6 +7,7 @@ local clientsModule = require('/lua/ge/extensions/beamRemotePlus/clients')
 local commandsModule = require('/lua/ge/extensions/beamRemotePlus/commands')
 local telemetryModule = require('/lua/ge/extensions/beamRemotePlus/telemetry')
 local optionalModsModule = require('/lua/ge/extensions/beamRemotePlus/optionalMods')
+local povModule = require('/lua/ge/extensions/beamRemotePlus/pov')
 local versionModule = require('/lua/ge/extensions/beamRemotePlus/version')
 local vehicleActions = require('/lua/ge/extensions/beamRemotePlus/vehicleActions')
 
@@ -65,6 +66,9 @@ deps:
   nativeRemote                optional nativeRemote.new(...) instance: the
                               game's own remote control (UDP 4444)
   listVehicleActions(model)   optional, the vehicle's own actions (vehicleActions.vehicleEntries)
+  povViews                    optional { createView, destroyView, startOutput, stopOutput,
+                              outputStatus, update, cycleCamera }: the
+                              game's hidden views for the point of view video (pov.lua)
   runVehicleAction(vehicle, name, value)  optional, runs one of them -> ok, err
 ]]
 function M.new(deps)
@@ -128,6 +132,36 @@ function M.new(deps)
     return deps.runVehicleAction(vehicle, name, value)
   end
 
+  local pov = deps.povViews and povModule.new({
+    createView = deps.povViews.createView,
+    destroyView = deps.povViews.destroyView,
+    startOutput = deps.povViews.startOutput,
+    stopOutput = deps.povViews.stopOutput,
+    outputStatus = deps.povViews.outputStatus,
+    update = deps.povViews.update,
+    cycleCamera = deps.povViews.cycleCamera,
+    notify = function(ip, info) deps.transport.send(protocol.buildPovMessage(info), ip, protocol.CLIENT_PORT) end,
+    clock = deps.clock,
+  }) or nil
+
+  -- quality: false = off, true = default, else a quality of pov.lua.
+  local function setPov(client, quality)
+    if not quality then
+      if pov.stop(client.ip) then log.info('point of view video stopped for ' .. client.deviceName) end
+      return true
+    end
+    quality = quality ~= true and quality or nil
+    local ok, err, detail = pov.start(client, quality)
+    if ok then
+      log.info('point of view video for ' .. client.deviceName .. ' (player ' .. tostring(client.player) .. ', '
+        .. (quality or povModule.DEFAULT_QUALITY) .. ')')
+    elseif err == povModule.ERR_ENCODER then
+      log.warn('no point of view video for ' .. client.deviceName .. ': the video encoder of the graphics card did not start ('
+        .. tostring(detail) .. '), see the videoStream lines of this log')
+    end
+    return ok, err
+  end
+
   local commands = commandsModule.new({
     getVehicle = deps.getVehicle,
     switchVehicle = deps.switchVehicle,
@@ -136,6 +170,8 @@ function M.new(deps)
     buttons = { shiftUp = clientsModule.BUTTON_SHIFT_UP, shiftDown = clientsModule.BUTTON_SHIFT_DOWN },
     requestActions = requestActions,
     runVehicleAction = runVehicleAction,
+    setPov = pov and setPov or nil,
+    cyclePovCamera = pov and function(client, offset) return pov.cycleCamera(client.ip, offset) end or nil,
   })
 
   local telemetry = telemetryModule.new({
@@ -301,7 +337,10 @@ function M.new(deps)
     return true
   end
 
-  function self.shutdown() stopListening() end
+  function self.shutdown()
+    if pov then pov.stopAll() end
+    stopListening()
+  end
 
   -- Packet handlers ---------------------------------------------------------
 
@@ -560,11 +599,20 @@ function M.new(deps)
 
     telemetry.tick(clients)
 
+    if pov then
+      for ip, err in pairs(pov.tick(clients)) do
+        local client = clients.get(ip)
+        log.warn('point of view video stopped for ' .. (client and client.deviceName or ip) .. ': ' .. tostring(err)
+          .. (err == povModule.ERR_ENCODER and ', see the videoStream lines of this log' or ''))
+      end
+    end
+
     if now - lastHeartbeat > protocol.HEARTBEAT_INTERVAL_MS then
       lastHeartbeat = now
       log.debug('heartbeat: ' .. clients.count() .. ' phone(s) connected')
     end
   end
+
 
   log.debugEnabled = deps.config.get('debug')
   return self

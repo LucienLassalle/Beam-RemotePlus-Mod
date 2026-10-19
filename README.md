@@ -26,6 +26,14 @@ longer maintained.
 - Vehicle state: body and engine damage, drivetrain, tyres, brakes, clutch,
   the real structure of the vehicle for the phone's damage view, and a radar
   of the cars around.
+- Point of view video (BeamNG.drive 0.40 or newer): the phone can show the
+  view of its own car, from the driver's seat or any camera picked with its
+  camera buttons, rendered by the game in a hidden view (the PC screen keeps
+  its own camera) and encoded in H.264 by the graphics card, up to 1080p at
+  60 frames per second. Measured 60 → 58 fps in game at 720p 60 (BeamNG.drive
+  0.40, 1440p). It needs the video encoder of the graphics card: NVENC, AMF
+  or QuickSync with DirectX 11/12, Vulkan video with Vulkan (on Linux, a Mesa
+  build with H.264 encoding); without it the phone says so.
 - Vehicle functions from the phone: horn, lights, indicators, hazards,
   parking brake, ignition, drive mode, gearbox mode, cruise control, gears,
   recovery, vehicle and camera switching, and on police cars, ambulances,
@@ -116,7 +124,7 @@ flowchart LR
         mod -- "reads the pairing code" --> native
     end
     phone -- "discovery, ping,<br/>controls, commands" --> mod
-    mod -- "hello, pong,<br/>telemetry, events" --> phone
+    mod -- "hello, pong,<br/>telemetry, events,<br/>point of view video" --> phone
     phone -- "pairing handshake" --> native
 ```
 
