@@ -126,8 +126,9 @@ deps:
   update(view) -> inside           keeps the camera of the view; true for a seat camera
   cycleCamera(view, offset) -> ok, err
   look(view, dx, dy)               turns the camera of the view (relative, like a mouse)
-  resetCamera(view)                the camera of the view again, centred (also leaves the free camera)
-  setFree(view) -> ok, err         the free camera, where the view looks
+  recenter(view)                   turns the camera of the view back to where it looks by default, smoothly
+  setFree(view, on) -> ok, err     the free camera where the view looks, or back to the camera it left
+  frame(view)                      called every game frame (the smooth recentring)
   fly(view, value)                 the free camera flies forward (> 0) or backward (< 0), -1..1
   notify(ip, info)                 info = { state, error, inside, quality, free }
   clock() -> ms
@@ -246,7 +247,8 @@ function M.new(deps)
     if not stream.free then return end
     stopFlying(stream)
     stream.free = false
-    pcall(deps.resetCamera, stream.view)
+    pcall(deps.setFree, stream.view, false)
+    pcall(deps.recenter, stream.view)
     tell(ip, stream)
   end
 
@@ -272,7 +274,7 @@ function M.new(deps)
   function self.recenter(ip)
     local stream = streams[ip]
     if not (stream and stream.view) then return nil end
-    if not stream.free then deps.resetCamera(stream.view) end
+    if not stream.free then deps.recenter(stream.view) end
     return true
   end
 
@@ -286,7 +288,7 @@ function M.new(deps)
       return true
     end
     if stream.free then return true end
-    local ok, err = deps.setFree(stream.view)
+    local ok, err = deps.setFree(stream.view, true)
     if not ok then return false, err end
     stream.free = true
     tell(ip, stream)
@@ -327,6 +329,10 @@ function M.new(deps)
   -- Returns the phones whose video failed, as { [ip] = err }.
   function self.tick(clients)
     local now = deps.clock()
+    for _, ip in ipairs(order) do
+      local view = streams[ip].view
+      if view then pcall(deps.frame, view) end
+    end
     if now < nextCheck then return {} end
     nextCheck = now + M.CHECK_INTERVAL_MS
     local failed = {}

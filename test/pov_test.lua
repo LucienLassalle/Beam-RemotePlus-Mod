@@ -27,8 +27,9 @@ local function setup(opts)
     update = function() return env.inside end,
     cycleCamera = function(view, offset) view.cycled = offset return true end,
     look = function(view, dx, dy) view.looked = { dx, dy } end,
-    resetCamera = function(view) view.resets = (view.resets or 0) + 1 end,
-    setFree = function(view) view.free = true return true end,
+    recenter = function(view) view.recentred = (view.recentred or 0) + 1 end,
+    setFree = function(view, on) view.free = on return true end,
+    frame = function(view) view.frames = (view.frames or 0) + 1 end,
     fly = function(view, value) env.flights[#env.flights + 1] = value end,
     notify = function(ip, info) env.told[#env.told + 1] = { ip = ip, info = info } end,
     clock = env.clock.fn,
@@ -260,7 +261,14 @@ t.describe('pov: turning the camera of the video', function()
     t.assertNil(env.pov.recenter('10.0.0.2'))
     env.pov.start(env.client('10.0.0.2', 0))
     t.assertTrue(env.pov.recenter('10.0.0.2'))
-    t.assertEquals(env.views[1].resets, 1)
+    t.assertEquals(env.views[1].recentred, 1)
+  end)
+  t.it('gives the view every game frame, for a smooth recentring', function()
+    local env = setup()
+    env.pov.start(env.client('10.0.0.2', 0))
+    env.pov.tick(env.registry)
+    env.pov.tick(env.registry) -- between two checks too
+    t.assertEquals(env.views[1].frames, 2)
   end)
 end)
 
@@ -276,12 +284,13 @@ t.describe('pov: free camera', function()
     t.assertTrue(view.free)
     t.assertTrue(env.last().free)
     t.assertTrue(env.pov.recenter('10.0.0.2'))
-    t.assertNil(view.resets) -- nothing to put back in the free camera
+    t.assertNil(view.recentred) -- nothing to put back in the free camera
   end)
   t.it('off: the camera it left, centred, and the phone is told', function()
     local env, view = freeCamera()
     env.pov.setFreeCamera('10.0.0.2', false)
-    t.assertEquals(view.resets, 1)
+    t.assertEquals(view.recentred, 1)
+    t.assertFalse(view.free)
     t.assertFalse(env.last().free)
   end)
   t.it('flies only as the free camera, while the phone repeats it', function()
@@ -304,7 +313,7 @@ t.describe('pov: free camera', function()
     env.pov.fly('10.0.0.2', 1)
     env.pov.cycleCamera('10.0.0.2', 1)
     t.assertEquals(env.flights[2], 0)
-    t.assertEquals(view.resets, 1)
+    t.assertEquals(view.recentred, 1)
     t.assertEquals(view.cycled, 1)
     t.assertFalse(env.last().free)
   end)

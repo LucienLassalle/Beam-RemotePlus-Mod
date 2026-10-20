@@ -345,7 +345,9 @@ encoder). The video never runs faster than the game.
   the driver's seat back.
 - The phone turns the camera of its video with `look`, never the PC's (the
   view has its own input player, like a split-screen player). `look_center`
-  gives the view fresh cameras: the game resets no camera of a hidden view.
+  turns it back to where it looks by default: smoothly for a seat camera
+  (about half a second), with the camera's own reset for the others, never
+  touching the PC's camera.
 - `freecam|1`: the game's free camera, starting where the video looks; `fly`
   moves it along where it looks. The camera buttons and `freecam|0` bring
   back the camera it left, centred. Camera commands without the video fail

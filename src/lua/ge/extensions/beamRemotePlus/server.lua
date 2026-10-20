@@ -67,8 +67,8 @@ deps:
                               game's own remote control (UDP 4444)
   listVehicleActions(model)   optional, the vehicle's own actions (vehicleActions.vehicleEntries)
   povViews                    optional { createView, destroyView, startOutput, stopOutput,
-                              outputStatus, update, cycleCamera, look, resetCamera,
-                              setFree, fly }: the
+                              outputStatus, update, cycleCamera, look, recenter,
+                              setFree, fly, frame }: the
                               game's hidden views for the point of view video (pov.lua)
   runVehicleAction(vehicle, name, value)  optional, runs one of them -> ok, err
 ]]
@@ -142,7 +142,8 @@ function M.new(deps)
     update = deps.povViews.update,
     cycleCamera = deps.povViews.cycleCamera,
     look = deps.povViews.look,
-    resetCamera = deps.povViews.resetCamera,
+    recenter = deps.povViews.recenter,
+    frame = deps.povViews.frame,
     setFree = deps.povViews.setFree,
     fly = deps.povViews.fly,
     notify = function(ip, info) deps.transport.send(protocol.buildPovMessage(info), ip, protocol.CLIENT_PORT) end,
