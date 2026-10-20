@@ -13,9 +13,9 @@ local function setup(opts)
       return view
     end,
     destroyView = function() env.destroyed = env.destroyed + 1 end,
-    startOutput = function(view, url, quality)
+    startOutput = function(view, url, quality, bitrate)
       if opts.noOutput then return nil, 'no_output' end
-      local output = { view = view, url = url, quality = quality }
+      local output = { view = view, url = url, quality = quality, bitrate = bitrate }
       env.outputs[#env.outputs + 1] = output
       return output
     end,
@@ -73,9 +73,27 @@ t.describe('pov: video', function()
   end)
   t.it('renders the size asked by the phone, the shape of its screen', function()
     local env = setup()
-    env.pov.start(env.client('10.0.0.2', 0), '720p60', povModule.parseSize('720p60', '1424x640'))
+    env.pov.start(env.client('10.0.0.2', 0), '720p60', { size = povModule.parseSize('720p60', '1424x640') })
     t.assertEquals(env.views[1].w, 1424)
     t.assertEquals(env.views[1].h, 640)
+  end)
+  t.it('encodes at the bitrate asked by the phone, within the limit', function()
+    local env = setup()
+    env.pov.start(env.client('10.0.0.2', 0), '720p60')
+    t.assertEquals(env.outputs[1].bitrate, 8000000)
+    env.pov.start(env.clients['10.0.0.2'], '720p60', { bitrate = 'high' })
+    t.assertEquals(env.outputs[2].bitrate, 12000000)
+    t.assertEquals(povModule.bitrate('1080p60', 'max'), 32000000)
+    local ok, err = env.pov.start(env.clients['10.0.0.2'], '720p60', { bitrate = 'huge' })
+    t.assertFalse(ok)
+    t.assertEquals(err, 'bad_argument')
+  end)
+  t.it('never asks for more than the limit', function()
+    for quality in pairs(povModule.QUALITIES) do
+      for level in pairs(povModule.BITRATES) do
+        t.assertTrue(povModule.bitrate(quality, level) <= povModule.MAX_BITRATE)
+      end
+    end
   end)
   t.it('never makes the game wait for the encoder, a keyframe each second', function()
     t.assertEquals(povModule.encoderOptions('720p60'), 'async_depth=2,g=60')
@@ -160,10 +178,10 @@ t.describe('pov: lifecycle', function()
   end)
   t.it('another size makes a new video (a folding phone opened)', function()
     local env = setup()
-    env.pov.start(env.client('10.0.0.2', 0), '720p60', povModule.parseSize('720p60', '1424x640'))
-    env.pov.start(env.clients['10.0.0.2'], '720p60', povModule.parseSize('720p60', '1424x640'))
+    env.pov.start(env.client('10.0.0.2', 0), '720p60', { size = povModule.parseSize('720p60', '1424x640') })
+    env.pov.start(env.clients['10.0.0.2'], '720p60', { size = povModule.parseSize('720p60', '1424x640') })
     t.assertEquals(#env.views, 1)
-    env.pov.start(env.clients['10.0.0.2'], '720p60', povModule.parseSize('720p60', '1048x872'))
+    env.pov.start(env.clients['10.0.0.2'], '720p60', { size = povModule.parseSize('720p60', '1048x872') })
     t.assertEquals(#env.views, 2)
     t.assertEquals(env.views[2].w, 1048)
     t.assertEquals(env.destroyed, 1)

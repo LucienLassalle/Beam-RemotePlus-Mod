@@ -144,17 +144,19 @@ function M.new(deps)
     clock = deps.clock,
   }) or nil
 
-  -- quality: false = off, true = default, else a quality of pov.lua; size:
-  -- the picture asked by the phone (pov.parseSize), nil = the quality's own.
-  local function setPov(client, quality, size)
+  -- quality: false = off, true = default, else a quality of pov.lua;
+  -- options: the picture size and bitrate asked by the phone (pov.start).
+  local function setPov(client, quality, options)
     if not quality then
       if pov.stop(client.ip) then log.info('point of view video stopped for ' .. client.deviceName) end
       return true
     end
     quality = quality ~= true and quality or nil
-    local ok, err, detail = pov.start(client, quality, size)
+    local ok, err, detail = pov.start(client, quality, options)
     if ok then
-      local shown = size and (', ' .. size.width .. 'x' .. size.height) or ''
+      local size, bitrate = options and options.size, options and options.bitrate
+      local shown = (size and (', ' .. size.width .. 'x' .. size.height) or '')
+        .. (bitrate and (', ' .. bitrate .. ' bitrate') or '')
       log.info('point of view video for ' .. client.deviceName .. ' (player ' .. tostring(client.player) .. ', '
         .. (quality or povModule.DEFAULT_QUALITY) .. shown .. ')')
     elseif err == povModule.ERR_ENCODER then
@@ -407,7 +409,7 @@ function M.new(deps)
   end
 
   local function handleCommand(client, data)
-    local name, arg, extra = protocol.parseCommand(data)
+    local name, arg, extras = protocol.parseCommand(data)
     if not name then return end
     -- The player left: the car brakes, then the phone is disconnected.
     if name == protocol.LEAVE_COMMAND then
@@ -425,7 +427,7 @@ function M.new(deps)
     if client.display and not commandsModule.DISPLAY_COMMANDS[name] then
       ok, err, canonical = false, 'display_only', name
     else
-      ok, err, canonical = commands.execute(client, name, arg, extra)
+      ok, err, canonical = commands.execute(client, name, arg, extras)
     end
     if ok then
       log.debug('command ' .. canonical .. (arg and ('|' .. arg) or '') .. ' from ' .. client.ip)

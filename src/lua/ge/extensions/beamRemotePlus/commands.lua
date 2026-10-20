@@ -105,9 +105,9 @@ deps:
   buttons = { shiftUp = n, shiftDown = n }
   requestActions(client) -> ok, err      lists the "More" commands (answered later)
   runVehicleAction(client, name, value) -> ok, err   a vehicle's own action
-  setPov(client, quality, size) -> ok, err   optional, starts the point of view video
-                                         (a quality of pov.lua, true = default; size from
-                                         pov.parseSize, nil = the quality's own) or stops it (false)
+  setPov(client, quality, options) -> ok, err   optional, starts the point of view video
+                                         (a quality of pov.lua, true = default; options as
+                                         pov.start takes them) or stops it (false)
   cyclePovCamera(client, offset) -> ok, err, or nil when the phone has no video
 ]]
 function M.new(deps)
@@ -159,18 +159,22 @@ function M.new(deps)
 
   -- Point of view video (pov.lua), only offered when the game can do it.
   if deps.setPov then
-    -- arg: 0 = off, 1 = on (default quality), or a quality; extra: the
-    -- picture size of that quality ("1600x720"), its own one without it.
-    special.pov = function(client, arg, extra)
+    -- arg: 0 = off, 1 = on (default quality), or a quality, then after a
+    -- quality, optionally: the picture size ("1600x720", the quality's own
+    -- one when empty) and the bitrate (a key of pov.BITRATES).
+    special.pov = function(client, arg, extras)
       local on = M.parseHoldArg(arg)
       if on == nil and povModule.QUALITIES[arg] then on = arg end
       if on == nil then return false, M.ERR_BAD_ARGUMENT end
-      local size
-      if extra and type(on) == 'string' then
-        size = povModule.parseSize(on, extra)
-        if not size then return false, M.ERR_BAD_ARGUMENT end
+      local options = {}
+      if type(on) == 'string' then
+        local size, bitrate = extras[1], extras[2]
+        options.size = size and povModule.parseSize(on, size)
+        if size and not options.size then return false, M.ERR_BAD_ARGUMENT end
+        if bitrate and not povModule.BITRATES[bitrate] then return false, M.ERR_BAD_ARGUMENT end
+        options.bitrate = bitrate
       end
-      return deps.setPov(client, on, size)
+      return deps.setPov(client, on, options)
     end
   end
 
@@ -205,14 +209,14 @@ function M.new(deps)
     return runAction(client, id, 0)
   end
 
-  -- Returns ok, error, canonicalName. extra: the field after arg, for the
-  -- commands taking two ("cmd|pov|<quality>|<size>").
-  function self.execute(client, name, arg, extra)
+  -- Returns ok, error, canonicalName. extras: the fields after arg (see
+  -- protocol.parseCommand), for the commands taking more than one.
+  function self.execute(client, name, arg, extras)
     local alias = M.ALIASES[name]
     if alias then name, arg = alias[1], alias[2] end
 
     if special[name] then
-      local ok, err = special[name](client, arg, extra)
+      local ok, err = special[name](client, arg, extras or {})
       return ok, err, name
     end
 

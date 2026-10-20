@@ -192,7 +192,8 @@ end
 -- Commands ----------------------------------------------------------------
 
 -- "cmd|horn|1" -> "horn", "1" ; "cmd|next_vehicle" -> "next_vehicle", nil ;
--- "cmd|pov|720p60|1600x720" -> "pov", "720p60", "1600x720"
+-- "cmd|pov|720p60|1600x720|high" -> "pov", "720p60", { "1600x720", "high" }
+-- (the fields after the argument, empty ones as nil, {} without any)
 function M.parseCommand(data)
   if not M.isCmdMessage(data) then return nil end
   local fields = M.splitFields(data:sub(#M.CMD_PREFIX + 1))
@@ -200,9 +201,11 @@ function M.parseCommand(data)
   if not name or name == '' then return nil end
   local arg = fields[2]
   if arg == '' then arg = nil end
-  local extra = fields[3]
-  if extra == '' then extra = nil end
-  return name, arg, extra
+  local extras = {}
+  for i = 3, #fields do
+    if fields[i] ~= '' then extras[i - 2] = fields[i] end
+  end
+  return name, arg, extras
 end
 
 function M.buildCommand(name, arg)

@@ -215,10 +215,10 @@ local povViews = {
     RenderViewManagerInstance:destroyView(view.rv)
     povInputs[view.input] = nil
   end,
-  startOutput = function(view, url, quality)
+  startOutput = function(view, url, quality, bitrate)
     local q = povModule.QUALITIES[quality]
     -- source, url, container, fps, bitrate, with audio (0 = no), encoder options
-    local id = startNetworkOutput(view.id, url, 'mpegts', q.fps, q.bitrate, 0, povModule.encoderOptions(quality))
+    local id = startNetworkOutput(view.id, url, 'mpegts', q.fps, bitrate, 0, povModule.encoderOptions(quality))
     if not id then return nil, 'no_output' end
     return id
   end,

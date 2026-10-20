@@ -63,9 +63,9 @@ local function setup(opts)
         return { id = id, player = player }
       end,
       destroyView = function() env.povDestroyed = (env.povDestroyed or 0) + 1 end,
-      startOutput = function(_, url)
+      startOutput = function(_, url, _, bitrate)
         if opts.noEncoder then return nil, 'no_output' end
-        env.povUrl = url
+        env.povUrl, env.povBitrate = url, bitrate
         return 1
       end,
       stopOutput = function() end,
@@ -686,14 +686,15 @@ t.describe('server: point of view video', function()
     env.server.update()
     t.assertEquals(env.povCamera, 1)
   end)
-  t.it('renders the video in the shape of the phone screen', function()
+  t.it('renders the video in the shape of the phone screen, at its bitrate', function()
     local env = setup({ pov = true })
     connect(env)
     env.server.onInputBindingsChanged({ ['vinput' .. env.server.clients.get('10.0.0.2').deviceInst] = 0 })
-    env.transport.push('cmd|pov|720p60|1424x640', '10.0.0.2')
+    env.transport.push('cmd|pov|720p60|1424x640|high', '10.0.0.2')
     env.server.update()
     t.assertEquals(env.povWidth, 1424)
     t.assertEquals(env.povHeight, 640)
+    t.assertEquals(env.povBitrate, 12000000)
   end)
   t.it('tells the phone why there is no video', function()
     local env = setup({ pov = true, noEncoder = true })
