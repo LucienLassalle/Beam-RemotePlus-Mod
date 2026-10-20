@@ -163,6 +163,18 @@ local function povQuality(rv)
   rv.settingsOverrideEnabled = true
 end
 
+-- The PC's anti-aliasing / upscaler and exposure, like split-screen views:
+-- without them edges, wires and foliage shimmer (a grainy picture), and a
+-- new view starts at the default exposure and blows out until it adapts.
+local function povLikeMainView(rv)
+  local main = RenderViewManagerInstance:getView('main')
+  if not main then return end
+  rv.upscaleMode = main.upscaleMode
+  rv.upscaleRenderScale = main.upscaleRenderScale
+  rv.upscaleSharpness = main.upscaleSharpness
+  rv.currentExposure = main.currentExposure
+end
+
 -- Seat cameras: the car's own dashboard is in view (not from the hood).
 local function isInsideCamera(name)
   return name == 'driver' or (name ~= nil and name:find('^occupant%.') ~= nil)
@@ -193,6 +205,7 @@ local povViews = {
     rv.compositeRect = RectI(-2, -2, 2, 2) -- off the window: never composited on screen
     rv.frustum = Frustum.construct(false, math.rad(70), width / height, 0.1, 2000)
     povQuality(rv)
+    povLikeMainView(rv)
     core_camera.createContext(id, id, input, player)
     povInputs[input] = true
     return { id = id, rv = rv, input = input, player = player, checkAt = 0 }
