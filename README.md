@@ -84,8 +84,9 @@ newer) shows:
   or *Second screen*, the version of its app (when the app
   sends it), and a red cross to **kick** it after confirmation.
   A coloured bar shows the colour the game gives its player (its name tag
-  above the car in local multiplayer, also shown on the phone).   Its status is live: **Connected**, **Signal lost** (no news for a
-  second: its car brakes for 5 seconds) or **Disconnected** (greyed out,
+  above the car in local multiplayer, also shown on the phone). Its status
+  is live: **Connected**, **Signal lost** (no news for a second: its car
+  brakes for 5 seconds) or **Disconnected** (greyed out,
   listed 30 seconds more).
   A kicked phone goes back to its pairing screen and may connect again
   later, unless new phones are locked out.
@@ -111,16 +112,10 @@ phone's own hotspot:
 | UDP **4446** | the mod | discovery, ping, controls, commands |
 | UDP **4444** | the game's own remote control (`core_remoteController`), opened by the mod; pairs no new phone while they are locked out | the app's pairing handshake |
 
-The mod answers each phone on the address the request came from, on two
-UDP ports of the phone:
-
-| Port (on the phone) | Sent by | Carries |
-|---|---|---|
-| UDP **4447** | the mod | hello, pong, telemetry, events |
-| UDP **4448** | the game's video streaming, started by the mod | point of view video (H.264), only while the phone asks for it |
-
-The app README describes the
-[ports of the phone](https://github.com/LucienLassalle/Beam-RemotePlus-Mobile#network).
+The mod answers each phone on the address the request came from, and the
+game's video streaming sends it the point of view video while it asks for
+it. The ports used on the phone are described in the
+[app README](https://github.com/LucienLassalle/Beam-RemotePlus-Mobile#network).
 
 ```mermaid
 flowchart LR
@@ -131,8 +126,7 @@ flowchart LR
         mod -- "reads the pairing code" --> native
     end
     phone -- "discovery, ping,<br/>controls, commands" --> mod
-    mod -- "hello, pong,<br/>telemetry, events<br/>(to UDP 4447)" --> phone
-    mod -- "point of view video<br/>(to UDP 4448)" --> phone
+    mod -- "hello, pong,<br/>telemetry, events,<br/>point of view video" --> phone
     phone -- "pairing handshake" --> native
 ```
 
@@ -152,8 +146,8 @@ flowchart LR
   New-NetFirewallRule -DisplayName "Beam-RemotePlus" -Direction Inbound -Protocol UDP -LocalPort 4444,4446 -Action Allow
   ```
 
-  UDP 4447 and 4448 are ports of the phone: the PC only sends to them, no
-  rule is needed for them.
+  Only these two incoming ports need a rule: the answers and the point of
+  view video leave the PC, no rule is needed for them.
 
   With the phone's connection shared over USB (USB tethering), Windows sees
   a new network, usually classified as **Public**: the rule above covers
@@ -183,10 +177,10 @@ without it. Both versions on the BeamNG.drive repository work:
 ## Optional: vehicle mods
 
 Some vehicle mods add their own controls. When the player drives one of
-them, the phone also offers these controls (F4 theme); with any other
+them, the mod also offers these controls to the phone; with any other
 vehicle nothing changes, and none of these mods is needed:
 
-| Vehicle mod (BeamNG.drive repository) | Controls on the phone |
+| Vehicle mod (BeamNG.drive repository) | Controls offered to the phone |
 |---|---|
 | **CF26** (add-on of the F4, its F3 configurations) | DRS, Push-to-Pass, pit limiter |
 | **Carbonworks F4** by LucasBE (fr04) | pit limiter |
