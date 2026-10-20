@@ -58,7 +58,10 @@ local function setup(opts)
     end,
     nativeRemote = env.native,
     povViews = opts.pov and {
-      createView = function(id, player, w) env.povWidth = w return { id = id, player = player } end,
+      createView = function(id, player, w, h)
+        env.povWidth, env.povHeight = w, h
+        return { id = id, player = player }
+      end,
       destroyView = function() env.povDestroyed = (env.povDestroyed or 0) + 1 end,
       startOutput = function(_, url)
         if opts.noEncoder then return nil, 'no_output' end
@@ -682,6 +685,15 @@ t.describe('server: point of view video', function()
     env.transport.push('cmd|cam_next', '10.0.0.2')
     env.server.update()
     t.assertEquals(env.povCamera, 1)
+  end)
+  t.it('renders the video in the shape of the phone screen', function()
+    local env = setup({ pov = true })
+    connect(env)
+    env.server.onInputBindingsChanged({ ['vinput' .. env.server.clients.get('10.0.0.2').deviceInst] = 0 })
+    env.transport.push('cmd|pov|720p60|1424x640', '10.0.0.2')
+    env.server.update()
+    t.assertEquals(env.povWidth, 1424)
+    t.assertEquals(env.povHeight, 640)
   end)
   t.it('tells the phone why there is no video', function()
     local env = setup({ pov = true, noEncoder = true })

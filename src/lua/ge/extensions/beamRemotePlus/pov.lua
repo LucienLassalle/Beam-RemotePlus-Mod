@@ -25,13 +25,36 @@ M.CHECK_INTERVAL_MS = 250
 -- next frames): only a failure lasting this long counts.
 M.START_GRACE_MS = 1000
 
--- Asked by the phone (cmd|pov|<quality>, 1 = the default one).
+-- Asked by the phone (cmd|pov|<quality>[|<width>x<height>], 1 = the
+-- default one). width x height: the picture when the phone gives no size,
+-- and the most pixels it may ask for.
 M.QUALITIES = {
   ['720p60'] = { width = 1280, height = 720, fps = 60, bitrate = 8000000 },
   ['1080p30'] = { width = 1920, height = 1080, fps = 30, bitrate = 10000000 },
   ['1080p60'] = { width = 1920, height = 1080, fps = 60, bitrate = 16000000 },
 }
 M.DEFAULT_QUALITY = '720p60'
+
+-- Picture size asked by the phone (the shape of its screen): both sides a
+-- multiple of SIZE_STEP (whole blocks of the H.264 encoders), within
+-- MIN_SIDE..MAX_SIDE (largest picture of the hardware encoders).
+M.SIZE_STEP = 8
+M.MIN_SIDE = 160
+M.MAX_SIDE = 4096
+
+-- "1600x720" -> { width = 1600, height = 720 }, or nil when it is not a
+-- valid size for that quality (more pixels than it allows).
+function M.parseSize(quality, text)
+  local q = M.QUALITIES[quality]
+  local width, height = tostring(text):match('^(%d+)x(%d+)$')
+  width, height = tonumber(width), tonumber(height)
+  if not (q and width and height) then return nil end
+  local function validSide(side)
+    return side % M.SIZE_STEP == 0 and side >= M.MIN_SIDE and side <= M.MAX_SIDE
+  end
+  if not (validSide(width) and validSide(height)) or width * height > q.width * q.height then return nil end
+  return { width = width, height = height }
+end
 
 -- Video states sent to the phone.
 M.STARTING = 'starting'
@@ -88,7 +111,7 @@ deps:
 ]]
 function M.new(deps)
   local self = {}
-  local streams = {} -- [ip] = { player, quality, view, output, state, error, inside }
+  local streams = {} -- [ip] = { player, quality, width, height, view, output, state, error, inside }
   local order = {}   -- ips, in start order
   local nextId = 0
   local nextCheck = 0
@@ -103,11 +126,10 @@ function M.new(deps)
     stream.output, stream.view = nil, nil
   end
 
-  -- View + encoder for the stream's player and quality: ok, err, detail.
+  -- View + encoder for the stream's player, size and quality: ok, err, detail.
   local function open(ip, stream)
     nextId = nextId + 1
-    local q = M.QUALITIES[stream.quality]
-    local ok, view, err = pcall(deps.createView, 'beamRemotePlusPov' .. nextId, stream.player, q.width, q.height)
+    local ok, view, err = pcall(deps.createView, 'beamRemotePlusPov' .. nextId, stream.player, stream.width, stream.height)
     if not (ok and view) then return false, ok and err or view end
     stream.view = view
     local output
@@ -144,19 +166,22 @@ function M.new(deps)
   end
 
   -- Starts the video of a phone (player = its player, 0-based), or changes
-  -- its quality (a key of QUALITIES, the default one when nil).
+  -- its quality (a key of QUALITIES, the default one when nil) or its size
+  -- ({ width, height } from parseSize, the quality's own when nil).
   -- Returns ok, err, detail; the phone is told of an encoder failure.
-  function self.start(client, quality)
+  function self.start(client, quality, size)
     quality = quality or M.DEFAULT_QUALITY
-    if not M.QUALITIES[quality] then return false, 'bad_argument' end
+    local q = M.QUALITIES[quality]
+    if not q then return false, 'bad_argument' end
+    size = size or q
     if client.player == nil or client.player < 0 then return false, 'no_player' end
     local stream = streams[client.ip]
-    if stream and stream.quality == quality then
+    if stream and stream.quality == quality and stream.width == size.width and stream.height == size.height then
       tell(client.ip, stream)
       return true
     end
     if stream then self.stop(client.ip) end
-    stream = { player = client.player, quality = quality }
+    stream = { player = client.player, quality = quality, width = size.width, height = size.height }
     local ok, err, detail = open(client.ip, stream)
     if not ok then
       if err == M.ERR_ENCODER then fail(client.ip, stream, err) end

@@ -105,8 +105,9 @@ deps:
   buttons = { shiftUp = n, shiftDown = n }
   requestActions(client) -> ok, err      lists the "More" commands (answered later)
   runVehicleAction(client, name, value) -> ok, err   a vehicle's own action
-  setPov(client, quality) -> ok, err     optional, starts the point of view video
-                                         ('low', 'medium', 'high', true = default) or stops it (false)
+  setPov(client, quality, size) -> ok, err   optional, starts the point of view video
+                                         (a quality of pov.lua, true = default; size from
+                                         pov.parseSize, nil = the quality's own) or stops it (false)
   cyclePovCamera(client, offset) -> ok, err, or nil when the phone has no video
 ]]
 function M.new(deps)
@@ -158,12 +159,18 @@ function M.new(deps)
 
   -- Point of view video (pov.lua), only offered when the game can do it.
   if deps.setPov then
-    -- arg: 0 = off, 1 = on (default quality), or a quality.
-    special.pov = function(client, arg)
+    -- arg: 0 = off, 1 = on (default quality), or a quality; extra: the
+    -- picture size of that quality ("1600x720"), its own one without it.
+    special.pov = function(client, arg, extra)
       local on = M.parseHoldArg(arg)
       if on == nil and povModule.QUALITIES[arg] then on = arg end
       if on == nil then return false, M.ERR_BAD_ARGUMENT end
-      return deps.setPov(client, on)
+      local size
+      if extra and type(on) == 'string' then
+        size = povModule.parseSize(on, extra)
+        if not size then return false, M.ERR_BAD_ARGUMENT end
+      end
+      return deps.setPov(client, on, size)
     end
   end
 
@@ -198,13 +205,14 @@ function M.new(deps)
     return runAction(client, id, 0)
   end
 
-  -- Returns ok, error, canonicalName.
-  function self.execute(client, name, arg)
+  -- Returns ok, error, canonicalName. extra: the field after arg, for the
+  -- commands taking two ("cmd|pov|<quality>|<size>").
+  function self.execute(client, name, arg, extra)
     local alias = M.ALIASES[name]
     if alias then name, arg = alias[1], alias[2] end
 
     if special[name] then
-      local ok, err = special[name](client, arg)
+      local ok, err = special[name](client, arg, extra)
       return ok, err, name
     end
 
