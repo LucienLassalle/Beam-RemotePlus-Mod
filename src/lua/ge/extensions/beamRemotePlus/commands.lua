@@ -19,6 +19,7 @@ M.ERR_UNKNOWN = 'unknown_command'
 M.ERR_NO_VEHICLE = 'no_vehicle'
 M.ERR_BAD_ARGUMENT = 'bad_argument'
 M.ERR_UNAVAILABLE = 'unavailable'
+M.ERR_NO_VIDEO = 'no_video' -- a camera command of the video while the phone has none
 
 -- Key in client.holds of a "More" command held down (action_down).
 M.ACTION_HOLD_PREFIX = 'action:'
@@ -70,8 +71,14 @@ M.PRESS_ACTIONS = {
   pit_limiter = 'electrics.values.pitLimiter = 1 - (electrics.values.pitLimiter or 0)',
 }
 
--- What a second-screen phone may still ask: they read, never drive.
-M.DISPLAY_COMMANDS = { debug = true, skeleton = true, pov = true }
+-- What a second-screen phone may still ask: they read, never drive (the
+-- camera of their own video included).
+M.DISPLAY_COMMANDS = {
+  debug = true, skeleton = true, pov = true, look = true, look_center = true, freecam = true, fly = true,
+}
+
+-- Largest relative turn of one look command (a quick swipe stays far below).
+M.MAX_LOOK = 2000
 
 -- Asks the vehicle VM for its skeleton geometry (sent back through
 -- extensions.beamRemotePlus_main.onSkeleton).
@@ -109,6 +116,8 @@ deps:
                                          (a quality of pov.lua, true = default; options as
                                          pov.start takes them) or stops it (false)
   cyclePovCamera(client, offset) -> ok, err, or nil when the phone has no video
+  lookPov(client, dx, dy), recenterPov(client), setFreePov(client, on), flyPov(client, value)
+                                         -> ok, err, or nil when the phone has no video (pov.lua)
 ]]
 function M.new(deps)
   local self = {}
@@ -175,6 +184,35 @@ function M.new(deps)
         options.bitrate = bitrate
       end
       return deps.setPov(client, on, options)
+    end
+
+    -- Camera of the video: nil from pov.lua means the phone has no video.
+    local function onVideo(ok, err)
+      if ok == nil then return false, M.ERR_NO_VIDEO end
+      return ok, err
+    end
+    local function number(text, limit)
+      local value = tonumber(text)
+      if value and value == value and math.abs(value) <= limit then return value end
+    end
+
+    -- look|<dx>|<dy>: turns the camera, relative like a mouse (x right, y down).
+    special.look = function(client, arg, extras)
+      local dx, dy = number(arg, M.MAX_LOOK), number(extras[1], M.MAX_LOOK)
+      if not (dx and dy) then return false, M.ERR_BAD_ARGUMENT end
+      return onVideo(deps.lookPov(client, dx, dy))
+    end
+    special.look_center = function(client) return onVideo(deps.recenterPov(client)) end
+    special.freecam = function(client, arg)
+      local on = M.parseHoldArg(arg)
+      if on == nil then return false, M.ERR_BAD_ARGUMENT end
+      return onVideo(deps.setFreePov(client, on))
+    end
+    -- fly|<value>: the free camera forward (> 0) or backward (< 0), -1..1.
+    special.fly = function(client, arg)
+      local value = number(arg, 1)
+      if not value then return false, M.ERR_BAD_ARGUMENT end
+      return onVideo(deps.flyPov(client, value))
     end
   end
 

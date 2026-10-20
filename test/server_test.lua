@@ -72,6 +72,11 @@ local function setup(opts)
       outputStatus = function() return 0 end,
       update = function() return true end,
       cycleCamera = function(_, offset) env.povCamera = offset return true end,
+      look = function(_, dx, dy) env.povLook = { dx, dy } end,
+      recenter = function() end,
+      frame = function() end,
+      setFree = function() env.povFree = true return true end,
+      fly = function() end,
     } or nil,
     getMods = function() return env.mods end,
     fileExists = function() return false end,
@@ -695,6 +700,18 @@ t.describe('server: point of view video', function()
     t.assertEquals(env.povWidth, 1424)
     t.assertEquals(env.povHeight, 640)
     t.assertEquals(env.povBitrate, 12000000)
+  end)
+  t.it('turns the camera of the video and switches the free camera', function()
+    local env = setup({ pov = true })
+    connect(env)
+    env.server.onInputBindingsChanged({ ['vinput' .. env.server.clients.get('10.0.0.2').deviceInst] = 0 })
+    env.transport.push('cmd|pov|1', '10.0.0.2')
+    env.transport.push('cmd|look|7|-2', '10.0.0.2')
+    env.transport.push('cmd|freecam|1', '10.0.0.2')
+    env.server.update()
+    t.assertEquals(env.povLook[1], 7)
+    t.assertEquals(env.povLook[2], -2)
+    t.assertTrue(env.povFree)
   end)
   t.it('tells the phone why there is no video', function()
     local env = setup({ pov = true, noEncoder = true })

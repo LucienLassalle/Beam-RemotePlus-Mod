@@ -148,6 +148,8 @@ end
 
 local POV_INPUT_PLAYER = 63
 local POV_CAMERA_CHECK_S = 1
+-- Time constant of the smooth recentring of a seat camera (95% in 3 of them).
+local POV_RECENTER_S = 0.15
 local povInputs = {} -- input players in use
 
 -- Same quality cut as split-screen views (render/splitScreen.lua): mirrors
@@ -183,6 +185,13 @@ end
 local function povCameraName(view)
   local state = core_camera.getContextCameraState(view.id)
   return state and state.cam
+end
+
+-- The camera object of the view (its own instance, not the PC's).
+local function povCamera(view)
+  local cams = view.vid and core_camera.getCameraDataById(view.vid, view.id)
+  local name = cams and povCameraName(view)
+  return name and cams[name]
 end
 
 -- Render views driven by camera contexts and the video streaming both
@@ -242,9 +251,57 @@ local povViews = {
         view.camera = vid and core_camera.getDriverCameraNameById(vid)
       end
       local current = view.camera and povCameraName(view)
-      if current and current ~= view.camera then core_camera.setContextCamera(view.id, view.camera) end
+      if not view.free and current and current ~= view.camera then core_camera.setContextCamera(view.id, view.camera) end
     end
-    return isInsideCamera(view.camera)
+    return not view.free and isInsideCamera(view.camera)
+  end,
+  -- Like the game's mouse look (core/input/actions/camera.json), through the
+  -- view's own input player: the PC's camera does not move.
+  look = function(view, dx, dy)
+    view.recentering = nil
+    core_camera.rotate_yaw_relative(dx, view.input)
+    core_camera.rotate_pitch_relative(-dy, view.input)
+  end,
+  -- The game resets no camera of a hidden view (core_camera.resetCamera
+  -- looks for a car of the view's input player, which has none), and a new
+  -- context would reset the PC's cameras too (destroyContext clears the
+  -- main view's camera cache). So the view's own camera, from
+  -- getCameraDataById, is turned back: smoothly for a seat camera (frame),
+  -- with its own reset for the others.
+  recenter = function(view)
+    local cam = povCamera(view)
+    if not cam then return end
+    if cam.relativeYaw then
+      view.recentering = cam
+    elseif cam.reset then
+      cam:reset()
+    end
+  end,
+  frame = function(view)
+    local now = os.clockhp()
+    local dt = math.min(now - (view.frameAt or now), 0.1)
+    view.frameAt = now
+    local cam = view.recentering
+    if not cam then return end
+    if cam ~= povCamera(view) then view.recentering = nil return end
+    local keep = math.exp(-dt / POV_RECENTER_S)
+    cam.relativeYaw, cam.relativePitch = cam.relativeYaw * keep, (cam.relativePitch or 0) * keep
+    if math.abs(cam.relativeYaw) + math.abs(cam.relativePitch) < 0.002 then
+      cam.relativeYaw, cam.relativePitch = 0, 0
+      view.recentering = nil
+    end
+  end,
+  -- The game's free camera of the view, starting where the view looks, or
+  -- back to the camera it left.
+  setFree = function(view, on)
+    view.free = on
+    view.recentering = nil
+    core_camera.setContextCamera(view.id, on and 'free' or view.camera)
+    return true
+  end,
+  fly = function(view, value)
+    core_camera.moveforward(math.max(value, 0), view.input)
+    core_camera.movebackward(math.max(-value, 0), view.input)
   end,
   cycleCamera = function(view, offset)
     local current = povCameraName(view)
