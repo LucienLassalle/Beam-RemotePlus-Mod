@@ -159,6 +159,12 @@ t.describe('protocol: v2 JSON messages', function()
     t.assertEquals(protocol.buildAckMessage('x', false, 'unknown_command'),
       '{"cmd":"x","error":"unknown_command","ok":false,"type":"ack"}')
   end)
+  t.it('builds pov messages, the free camera only when on', function()
+    t.assertEquals(protocol.buildPovMessage({ state = 'live', inside = false, quality = '720p60', free = true }),
+      '{"free":true,"inside":false,"quality":"720p60","state":"live","type":"pov"}')
+    t.assertEquals(protocol.buildPovMessage({ state = 'live', inside = true, quality = '720p60', free = false }),
+      '{"inside":true,"quality":"720p60","state":"live","type":"pov"}')
+  end)
   t.it('builds session messages', function()
     t.assertEquals(protocol.buildSessionMessage({ player = 1 }), '{"player":1,"type":"session"}')
   end)

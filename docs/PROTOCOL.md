@@ -116,6 +116,10 @@ cmd|<name>|1 / |0     hold commands (pressed / released)
 | `debug` | hold | `1` = acknowledge every command, `0` = errors only |
 | `skeleton` | press | sends the skeleton of the vehicle (`skeleton` messages below) |
 | `pov` | press | `720p60`, `1080p30` or `1080p60` = start the point of view video of the phone in that quality, optionally followed by `\|<width>x<height>` and `\|<bitrate>`, the picture size and bitrate (section 6), `1` = in the default one (`720p60`), `0` = stop it. Listed in the session `commands` only when the game can do it; fails with `no_player` while the phone has no player |
+| `look\|<dx>\|<dy>` | press | turns the camera of the point of view video by a relative amount, like a mouse: `dx` to the right, `dy` down (numbers, at most 2000 each) (section 6) |
+| `look_center` | press | puts the camera of the video back to where it looks by default |
+| `freecam` | hold | `1` = the free camera of the video, `0` = back to the camera it left, centred |
+| `fly` | press | `-1`..`1`: the free camera flies forward (> 0) or backward (< 0) for 1 s, repeated by the phone while it should keep flying; `not_free` outside the free camera |
 | `leave` | press | the player disconnects on purpose: the car is stopped like after a lost signal (watchdog above), then the phone is disconnected once the handbrake holds it (a second screen at once); never acknowledged |
 | `actions` | press | lists the commands of the "More" sheet for the vehicle (`actions` message below) |
 | `action\|<id>` | press | runs one of them (pressed then released) |
@@ -254,6 +258,7 @@ when the video starts and each time its state or camera changes:
 ```json
 {"type":"pov","state":"live","inside":true,"quality":"720p60"}
 {"type":"pov","state":"error","error":"encoder","quality":"720p60"}
+{"type":"pov","state":"live","inside":false,"quality":"720p60","free":true}
 ```
 
 - `state`: `starting` (the encoder is being set up), `live` (frames are
@@ -262,6 +267,7 @@ when the video starts and each time its state or camera changes:
   graphics card did not start (see section 6).
 - `inside`: the camera is a seat camera (driver or passenger), the car's
   own dashboard is in view.
+- `free`: the free camera of the video is on (left out when it is off).
 
 **`actions`**: answer to `cmd|actions`, the commands of the vehicle the
 phone drives, beyond the dashboard buttons:
@@ -337,6 +343,13 @@ encoder). The video never runs faster than the game.
 - While the phone has the video, `cam_next` / `cam_prev` cycle the cameras
   of its video, not the PC's, driver's seat included. Another car brings
   the driver's seat back.
+- The phone turns the camera of its video with `look`, never the PC's (the
+  view has its own input player, like a split-screen player). `look_center`
+  gives the view fresh cameras: the game resets no camera of a hidden view.
+- `freecam|1`: the game's free camera, starting where the video looks; `fly`
+  moves it along where it looks. The camera buttons and `freecam|0` bring
+  back the camera it left, centred. Camera commands without the video fail
+  with `no_video`; a second screen may send them too.
 - The video follows the phone: another player, another car. It stops with
   `cmd|pov|0`, when the phone disconnects or loses its player.
 - Each video costs the game an extra render of the world, at reduced detail

@@ -5,6 +5,8 @@
 -- context of the game following the car of its player, the way split-screen
 -- views do, never shown on the PC screen). It starts on the driver's seat;
 -- the camera buttons of the phone then cycle its cameras, not the PC's.
+-- The phone also turns that camera (look), puts it back (recenter), and
+-- switches to the game's free camera, flown with its pedals (fly).
 --
 -- The game encodes that view itself with the video encoder of the graphics
 -- card (H.264, libbngvs: NVENC, AMF, QuickSync or Vulkan video) straight
@@ -13,7 +15,8 @@
 -- (state 'error'), there is no fallback.
 --
 -- The phone is kept informed by "pov" messages (see protocol.lua): the
--- state of its video and whether the camera is a seat camera.
+-- state of its video, whether the camera is a seat camera, and whether it
+-- is the free camera.
 --
 -- Pure: the game's render views and encoder are behind deps (see main.lua).
 
@@ -24,6 +27,8 @@ M.CHECK_INTERVAL_MS = 250
 -- An output reads as failed until the game has set its encoder up (the
 -- next frames): only a failure lasting this long counts.
 M.START_GRACE_MS = 1000
+-- A fly command of the free camera lasts this long (the phone repeats it).
+M.FLY_HOLD_MS = 1000
 
 -- Asked by the phone (cmd|pov|<quality>[|<width>x<height>[|<bitrate>]], 1 =
 -- the default one). width x height: the picture when the phone gives no
@@ -120,7 +125,11 @@ deps:
   outputStatus(output) -> 1 starting, 0 live, < 0 failed
   update(view) -> inside           keeps the camera of the view; true for a seat camera
   cycleCamera(view, offset) -> ok, err
-  notify(ip, info)                 info = { state, error, inside, quality }
+  look(view, dx, dy)               turns the camera of the view (relative, like a mouse)
+  resetCamera(view)                the camera of the view again, centred (also leaves the free camera)
+  setFree(view) -> ok, err         the free camera, where the view looks
+  fly(view, value)                 the free camera flies forward (> 0) or backward (< 0), -1..1
+  notify(ip, info)                 info = { state, error, inside, quality, free }
   clock() -> ms
 ]]
 function M.new(deps)
@@ -131,7 +140,10 @@ function M.new(deps)
   local nextCheck = 0
 
   local function tell(ip, stream)
-    deps.notify(ip, { state = stream.state, error = stream.error, inside = stream.inside, quality = stream.quality })
+    deps.notify(ip, {
+      state = stream.state, error = stream.error, inside = stream.inside,
+      quality = stream.quality, free = stream.free,
+    })
   end
 
   local function release(stream)
@@ -224,12 +236,74 @@ function M.new(deps)
     for _, ip in ipairs({ unpack(order) }) do self.stop(ip) end
   end
 
+  local function stopFlying(stream)
+    if stream.flying then pcall(deps.fly, stream.view, 0) end
+    stream.flying, stream.flyUntil = nil, nil
+  end
+
+  -- Back from the free camera to the camera it left, centred.
+  local function leaveFree(ip, stream)
+    if not stream.free then return end
+    stopFlying(stream)
+    stream.free = false
+    pcall(deps.resetCamera, stream.view)
+    tell(ip, stream)
+  end
+
   -- Next / previous camera of the video of a phone: ok, err, or nil when
-  -- the phone has no video.
+  -- the phone has no video. Leaves the free camera first.
   function self.cycleCamera(ip, offset)
     local stream = streams[ip]
     if not (stream and stream.view) then return nil end
+    leaveFree(ip, stream)
     return deps.cycleCamera(stream.view, offset)
+  end
+
+  -- Turns the camera of the video of a phone by a relative amount (like a
+  -- mouse: x to the right, y down): ok, or nil when the phone has no video.
+  function self.look(ip, dx, dy)
+    local stream = streams[ip]
+    if not (stream and stream.view) then return nil end
+    deps.look(stream.view, dx, dy)
+    return true
+  end
+
+  -- Puts the camera of the video back to where it looks by default.
+  function self.recenter(ip)
+    local stream = streams[ip]
+    if not (stream and stream.view) then return nil end
+    if not stream.free then deps.resetCamera(stream.view) end
+    return true
+  end
+
+  -- Free camera of the video of a phone on or off (it starts where the
+  -- video looks; off brings back the camera it left, centred).
+  function self.setFreeCamera(ip, on)
+    local stream = streams[ip]
+    if not (stream and stream.view) then return nil end
+    if not on then
+      leaveFree(ip, stream)
+      return true
+    end
+    if stream.free then return true end
+    local ok, err = deps.setFree(stream.view)
+    if not ok then return false, err end
+    stream.free = true
+    tell(ip, stream)
+    return true
+  end
+
+  -- Flies the free camera forward (value > 0) or backward (< 0), -1..1, for
+  -- FLY_HOLD_MS: the phone repeats it while a pedal is pressed, a phone
+  -- gone silent leaves the camera still.
+  function self.fly(ip, value)
+    local stream = streams[ip]
+    if not (stream and stream.view) then return nil end
+    if not stream.free then return false, 'not_free' end
+    deps.fly(stream.view, value)
+    stream.flying = value ~= 0 or nil
+    stream.flyUntil = value ~= 0 and deps.clock() + M.FLY_HOLD_MS or nil
+    return true
   end
 
   local function check(ip, stream)
@@ -262,11 +336,13 @@ function M.new(deps)
       if not client or client.player == nil or client.player < 0 then
         self.stop(ip)
       else
+        if stream.flyUntil and now >= stream.flyUntil then stopFlying(stream) end
         if client.player ~= stream.player then
           release(stream)
           stream.player = client.player
+          stream.free, stream.flying, stream.flyUntil = false, nil, nil
           local ok, err = open(ip, stream)
-          if not ok then fail(ip, stream, err) end
+          if ok then tell(ip, stream) else fail(ip, stream, err) end
         end
         if streams[ip] then check(ip, stream) end
         if not streams[ip] then failed[ip] = stream.error end

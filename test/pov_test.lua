@@ -4,7 +4,10 @@ local povModule = require('/lua/ge/extensions/beamRemotePlus/pov')
 
 local function setup(opts)
   opts = opts or {}
-  local env = { clock = fakes.clock(), views = {}, outputs = {}, destroyed = 0, stopped = 0, told = {}, status = 1, inside = true }
+  local env = {
+    clock = fakes.clock(), views = {}, outputs = {}, flights = {}, destroyed = 0, stopped = 0, told = {},
+    status = 1, inside = true,
+  }
   env.pov = povModule.new({
     createView = function(id, player, w, h)
       if opts.noViews then return nil, 'unavailable:render_views' end
@@ -23,6 +26,10 @@ local function setup(opts)
     outputStatus = function() return env.status end,
     update = function() return env.inside end,
     cycleCamera = function(view, offset) view.cycled = offset return true end,
+    look = function(view, dx, dy) view.looked = { dx, dy } end,
+    resetCamera = function(view) view.resets = (view.resets or 0) + 1 end,
+    setFree = function(view) view.free = true return true end,
+    fly = function(view, value) env.flights[#env.flights + 1] = value end,
     notify = function(ip, info) env.told[#env.told + 1] = { ip = ip, info = info } end,
     clock = env.clock.fn,
   })
@@ -236,5 +243,75 @@ t.describe('pov: cameras of the video', function()
   end)
   t.it('goes to the seat when the game does not move', function()
     t.assertEquals(cycle(order, 'orbit', 'orbit', 'occupant.FL', 1), 'occupant.FL')
+  end)
+end)
+
+t.describe('pov: turning the camera of the video', function()
+  t.it('turns the camera of the video of the phone, if it has one', function()
+    local env = setup()
+    t.assertNil(env.pov.look('10.0.0.2', 5, -3))
+    env.pov.start(env.client('10.0.0.2', 0))
+    t.assertTrue(env.pov.look('10.0.0.2', 5, -3))
+    t.assertEquals(env.views[1].looked[1], 5)
+    t.assertEquals(env.views[1].looked[2], -3)
+  end)
+  t.it('puts the camera back to where it looks by default', function()
+    local env = setup()
+    t.assertNil(env.pov.recenter('10.0.0.2'))
+    env.pov.start(env.client('10.0.0.2', 0))
+    t.assertTrue(env.pov.recenter('10.0.0.2'))
+    t.assertEquals(env.views[1].resets, 1)
+  end)
+end)
+
+t.describe('pov: free camera', function()
+  local function freeCamera()
+    local env = setup()
+    env.pov.start(env.client('10.0.0.2', 0))
+    t.assertTrue(env.pov.setFreeCamera('10.0.0.2', true))
+    return env, env.views[1]
+  end
+  t.it('starts where the video looks, and tells the phone', function()
+    local env, view = freeCamera()
+    t.assertTrue(view.free)
+    t.assertTrue(env.last().free)
+    t.assertTrue(env.pov.recenter('10.0.0.2'))
+    t.assertNil(view.resets) -- nothing to put back in the free camera
+  end)
+  t.it('off: the camera it left, centred, and the phone is told', function()
+    local env, view = freeCamera()
+    env.pov.setFreeCamera('10.0.0.2', false)
+    t.assertEquals(view.resets, 1)
+    t.assertFalse(env.last().free)
+  end)
+  t.it('flies only as the free camera, while the phone repeats it', function()
+    local env = setup()
+    env.pov.start(env.client('10.0.0.2', 0))
+    local ok, err = env.pov.fly('10.0.0.2', 1)
+    t.assertFalse(ok)
+    t.assertEquals(err, 'not_free')
+    env.pov.setFreeCamera('10.0.0.2', true)
+    t.assertTrue(env.pov.fly('10.0.0.2', -0.5))
+    t.assertEquals(env.flights[1], -0.5)
+    env.tick()
+    t.assertEquals(#env.flights, 1)
+    env.clock.advance(povModule.FLY_HOLD_MS)
+    env.tick()
+    t.assertEquals(env.flights[2], 0) -- the phone went silent: it stops
+  end)
+  t.it('stops flying when leaving, and the camera buttons leave it', function()
+    local env, view = freeCamera()
+    env.pov.fly('10.0.0.2', 1)
+    env.pov.cycleCamera('10.0.0.2', 1)
+    t.assertEquals(env.flights[2], 0)
+    t.assertEquals(view.resets, 1)
+    t.assertEquals(view.cycled, 1)
+    t.assertFalse(env.last().free)
+  end)
+  t.it('is left for the view of a new player', function()
+    local env = freeCamera()
+    env.clients['10.0.0.2'].player = 1
+    env.tick()
+    t.assertFalse(env.last().free)
   end)
 end)

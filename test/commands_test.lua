@@ -19,6 +19,14 @@ local function setup(opts)
       calls.povCamera = offset
       return true
     end or nil,
+    lookPov = opts.pov and function(_, dx, dy)
+      if not opts.video then return nil end
+      calls.look = { dx, dy }
+      return true
+    end or nil,
+    recenterPov = opts.pov and function() calls.recentered = true return true end or nil,
+    setFreePov = opts.pov and function(_, on) calls.free = on return true end or nil,
+    flyPov = opts.pov and function(_, value) calls.fly = value return true end or nil,
     pulseButton = function(_, button) calls.button = button end,
     buttons = { shiftUp = 0, shiftDown = 1 },
     requestActions = function() calls.requested = true return true end,
@@ -309,5 +317,41 @@ t.describe('commands: point of view video', function()
     local ok, err = commands.execute(client, 'pov', '720p60', { '1424x640', 'huge' })
     t.assertFalse(ok)
     t.assertEquals(err, commandsModule.ERR_BAD_ARGUMENT)
+  end)
+end)
+
+t.describe('commands: camera of the video', function()
+  t.it('turns it by a relative amount, within bounds', function()
+    local commands, client, _, calls = setup({ pov = true, video = true })
+    t.assertTrue(commands.execute(client, 'look', '12', { '-4.5' }))
+    t.assertEquals(calls.look[1], 12)
+    t.assertEquals(calls.look[2], -4.5)
+    for _, bad in ipairs({ { 'x', { '1' } }, { '1', {} }, { '99999', { '0' } }, { 'nan', { '0' } } }) do
+      local ok, err = commands.execute(client, 'look', bad[1], bad[2])
+      t.assertFalse(ok)
+      t.assertEquals(err, commandsModule.ERR_BAD_ARGUMENT)
+    end
+  end)
+  t.it('needs the video', function()
+    local commands, client = setup({ pov = true })
+    local ok, err = commands.execute(client, 'look', '1', { '1' })
+    t.assertFalse(ok)
+    t.assertEquals(err, commandsModule.ERR_NO_VIDEO)
+  end)
+  t.it('recentres it, switches the free camera and flies it', function()
+    local commands, client, _, calls = setup({ pov = true, video = true })
+    t.assertTrue(commands.execute(client, 'look_center'))
+    t.assertTrue(calls.recentered)
+    t.assertTrue(commands.execute(client, 'freecam', '1'))
+    t.assertTrue(calls.free)
+    t.assertTrue(commands.execute(client, 'fly', '-0.5'))
+    t.assertEquals(calls.fly, -0.5)
+    t.assertFalse(commands.execute(client, 'fly', '2'))
+    t.assertFalse(commands.execute(client, 'freecam', 'maybe'))
+  end)
+  t.it('are allowed to a second screen, they drive nothing', function()
+    for _, name in ipairs({ 'look', 'look_center', 'freecam', 'fly' }) do
+      t.assertTrue(commandsModule.DISPLAY_COMMANDS[name])
+    end
   end)
 end)

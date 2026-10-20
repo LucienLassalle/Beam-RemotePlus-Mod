@@ -67,7 +67,8 @@ deps:
                               game's own remote control (UDP 4444)
   listVehicleActions(model)   optional, the vehicle's own actions (vehicleActions.vehicleEntries)
   povViews                    optional { createView, destroyView, startOutput, stopOutput,
-                              outputStatus, update, cycleCamera }: the
+                              outputStatus, update, cycleCamera, look, resetCamera,
+                              setFree, fly }: the
                               game's hidden views for the point of view video (pov.lua)
   runVehicleAction(vehicle, name, value)  optional, runs one of them -> ok, err
 ]]
@@ -140,6 +141,10 @@ function M.new(deps)
     outputStatus = deps.povViews.outputStatus,
     update = deps.povViews.update,
     cycleCamera = deps.povViews.cycleCamera,
+    look = deps.povViews.look,
+    resetCamera = deps.povViews.resetCamera,
+    setFree = deps.povViews.setFree,
+    fly = deps.povViews.fly,
     notify = function(ip, info) deps.transport.send(protocol.buildPovMessage(info), ip, protocol.CLIENT_PORT) end,
     clock = deps.clock,
   }) or nil
@@ -176,6 +181,10 @@ function M.new(deps)
     runVehicleAction = runVehicleAction,
     setPov = pov and setPov or nil,
     cyclePovCamera = pov and function(client, offset) return pov.cycleCamera(client.ip, offset) end or nil,
+    lookPov = pov and function(client, dx, dy) return pov.look(client.ip, dx, dy) end or nil,
+    recenterPov = pov and function(client) return pov.recenter(client.ip) end or nil,
+    setFreePov = pov and function(client, on) return pov.setFreeCamera(client.ip, on) end or nil,
+    flyPov = pov and function(client, value) return pov.fly(client.ip, value) end or nil,
   })
 
   local telemetry = telemetryModule.new({

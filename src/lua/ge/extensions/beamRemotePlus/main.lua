@@ -242,9 +242,34 @@ local povViews = {
         view.camera = vid and core_camera.getDriverCameraNameById(vid)
       end
       local current = view.camera and povCameraName(view)
-      if current and current ~= view.camera then core_camera.setContextCamera(view.id, view.camera) end
+      if not view.free and current and current ~= view.camera then core_camera.setContextCamera(view.id, view.camera) end
     end
-    return isInsideCamera(view.camera)
+    return not view.free and isInsideCamera(view.camera)
+  end,
+  -- Like the game's mouse look (core/input/actions/camera.json), through the
+  -- view's own input player: the PC's camera does not move.
+  look = function(view, dx, dy)
+    core_camera.rotate_yaw_relative(dx, view.input)
+    core_camera.rotate_pitch_relative(-dy, view.input)
+  end,
+  -- The game resets no camera of a hidden view (core_camera.resetCamera
+  -- looks for a car of the view's input player, which has none): a new
+  -- camera context brings fresh, centred cameras.
+  resetCamera = function(view)
+    view.free = false
+    core_camera.destroyContext(view.id)
+    core_camera.createContext(view.id, view.id, view.input, view.player)
+    if view.camera then core_camera.setContextCamera(view.id, view.camera) end
+  end,
+  -- The game's free camera of the view, starting where the view looks.
+  setFree = function(view)
+    core_camera.setContextCamera(view.id, 'free')
+    view.free = true
+    return true
+  end,
+  fly = function(view, value)
+    core_camera.moveforward(math.max(value, 0), view.input)
+    core_camera.movebackward(math.max(-value, 0), view.input)
   end,
   cycleCamera = function(view, offset)
     local current = povCameraName(view)

@@ -329,9 +329,13 @@ function M.buildAckMessage(command, ok, error)
 end
 
 -- State of the point of view video of a phone (pov.lua): state = starting,
--- live or error, error = why there is none, inside = a seat camera.
+-- live or error, error = why there is none, inside = a seat camera, free =
+-- the free camera (left out when off).
 function M.buildPovMessage(info)
-  return json.encode({ type = 'pov', state = info.state, error = info.error, inside = info.inside, quality = info.quality })
+  return json.encode({
+    type = 'pov', state = info.state, error = info.error, inside = info.inside, quality = info.quality,
+    free = info.free or nil,
+  })
 end
 
 function M.buildSessionMessage(info)
