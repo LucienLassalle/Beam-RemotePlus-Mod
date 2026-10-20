@@ -115,7 +115,7 @@ cmd|<name>|1 / |0     hold commands (pressed / released)
 | `cam_next`, `cam_prev` | press | camera (of the point of view video instead while the phone has it, section 6) |
 | `debug` | hold | `1` = acknowledge every command, `0` = errors only |
 | `skeleton` | press | sends the skeleton of the vehicle (`skeleton` messages below) |
-| `pov` | press | `720p60`, `1080p30` or `1080p60` = start the point of view video of the phone in that quality (section 6), `1` = in the default one (`720p60`), `0` = stop it. Listed in the session `commands` only when the game can do it; fails with `no_player` while the phone has no player |
+| `pov` | press | `720p60`, `1080p30` or `1080p60` = start the point of view video of the phone in that quality, optionally followed by `\|<width>x<height>` and `\|<bitrate>`, the picture size and bitrate (section 6), `1` = in the default one (`720p60`), `0` = stop it. Listed in the session `commands` only when the game can do it; fails with `no_player` while the phone has no player |
 | `leave` | press | the player disconnects on purpose: the car is stopped like after a lost signal (watchdog above), then the phone is disconnected once the handbrake holds it (a second screen at once); never acknowledged |
 | `actions` | press | lists the commands of the "More" sheet for the vehicle (`actions` message below) |
 | `action\|<id>` | press | runs one of them (pressed then released) |
@@ -290,9 +290,10 @@ shift light (0/1), oil temperature.
 
 ## 6. Point of view video (BeamNG.drive 0.40 or newer)
 
-After `cmd|pov|<quality>`, the mod renders the view of the car of the
-phone's player from its driver's seat (a hidden view of the game, never
-drawn on the PC screen; the player keeps its own camera on the PC). The
+After `cmd|pov|<quality>[|<width>x<height>[|<bitrate>]]`, the mod renders
+the view of the car of the phone's player from its driver's seat (a hidden
+view of the game, never drawn on the PC screen; the player keeps its own
+camera on the PC), with the anti-aliasing and exposure of the PC's view. The
 game's own video streaming (libbngvs, 0.40) encodes it with the video
 encoder of the graphics card, straight from the GPU, and sends it to the
 phone, port **4448**:
@@ -308,6 +309,19 @@ phone, port **4448**:
 | `720p60` (default, `1`) | 1280×720 | 60 | 8 Mbit/s | 58 fps |
 | `1080p30` | 1920×1080 | 30 | 10 Mbit/s | 60 fps |
 | `1080p60` | 1920×1080 | 60 | 16 Mbit/s | 59 fps |
+
+- `<width>x<height>` (`1424x640`): the picture size, in the shape of the
+  phone's screen, so that no part of the view is cut off. Each side is a
+  multiple of 8, from 160 to 4096, and the picture has at most the pixels
+  of its quality's image. Without it, the picture is the quality's image
+  (16:9). A wrong size is refused (`bad_argument`). Asking for another size
+  restarts the video. The game keeps the vertical field of view of the
+  camera: a wider picture shows more on the sides.
+- `<bitrate>`: `normal` (default, the bitrate above), `high` (x1.5) or
+  `max` (x2), at most 50 Mbit/s. More bits make a finer picture as long as
+  the Wi-Fi carries them without losses. The size may be left empty
+  (`cmd|pov|720p60||high`). Another bitrate restarts the video; a wrong one
+  is refused (`bad_argument`).
 
 Measured on BeamNG.drive 0.40, 1440p, Radeon RX 6800 XT (Vulkan video
 encoder). The video never runs faster than the game.

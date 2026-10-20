@@ -10,7 +10,10 @@ local function setup(opts)
     getVehicle = function(player) calls.player = player return not opts.noVehicle and vehicle or nil end,
     switchVehicle = function(player, dir) calls.switch = dir return true end,
     cycleCamera = function(player, offset) calls.camera = offset return true end,
-    setPov = opts.pov and function(_, quality) calls.pov = quality return true end or nil,
+    setPov = opts.pov and function(_, quality, options)
+      calls.pov, calls.povOptions = quality, options
+      return true
+    end or nil,
     cyclePovCamera = opts.pov and function(_, offset)
       if not opts.video then return nil end
       calls.povCamera = offset
@@ -282,6 +285,28 @@ t.describe('commands: point of view video', function()
     t.assertTrue(commands.execute(client, 'pov', '0'))
     t.assertEquals(calls.pov, false)
     local ok, err = commands.execute(client, 'pov', 'ultra')
+    t.assertFalse(ok)
+    t.assertEquals(err, commandsModule.ERR_BAD_ARGUMENT)
+  end)
+  t.it('takes the picture size of the phone screen', function()
+    local commands, client, _, calls = setup({ pov = true })
+    t.assertTrue(commands.execute(client, 'pov', '720p60', { '1424x640' }))
+    t.assertEquals(calls.pov, '720p60')
+    t.assertEquals(calls.povOptions.size.width, 1424)
+    t.assertTrue(commands.execute(client, 'pov', '720p60'))
+    t.assertNil(calls.povOptions.size)
+    local ok, err = commands.execute(client, 'pov', '720p60', { '1920x1080' })
+    t.assertFalse(ok)
+    t.assertEquals(err, commandsModule.ERR_BAD_ARGUMENT)
+  end)
+  t.it('takes the bitrate asked by the phone, after the size', function()
+    local commands, client, _, calls = setup({ pov = true })
+    t.assertTrue(commands.execute(client, 'pov', '720p60', { '1424x640', 'high' }))
+    t.assertEquals(calls.povOptions.bitrate, 'high')
+    t.assertTrue(commands.execute(client, 'pov', '720p60', { nil, 'max' }))
+    t.assertNil(calls.povOptions.size)
+    t.assertEquals(calls.povOptions.bitrate, 'max')
+    local ok, err = commands.execute(client, 'pov', '720p60', { '1424x640', 'huge' })
     t.assertFalse(ok)
     t.assertEquals(err, commandsModule.ERR_BAD_ARGUMENT)
   end)
