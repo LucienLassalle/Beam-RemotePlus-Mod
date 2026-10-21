@@ -83,6 +83,10 @@ M.ERROR = 'error'
 -- Why there is no video (error of the 'error' state).
 M.ERR_ENCODER = 'encoder' -- the graphics card's video encoder did not start
 
+-- Why the game cannot do the video at all (povUnavailable of the session).
+M.UNAVAILABLE_GAME = 'game_version'  -- older than 0.40
+M.UNAVAILABLE_PLATFORM = 'platform'  -- a build of the game without video streaming (native Linux)
+
 -- Encoder options (FFmpeg names). async_depth=2: the game hands a frame to
 -- the encoder and goes on, its packet comes out on the next frame. The
 -- library's default (1) makes every game frame wait for its encode: 60 fps

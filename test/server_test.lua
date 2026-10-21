@@ -78,6 +78,7 @@ local function setup(opts)
       setFree = function() env.povFree = true return true end,
       fly = function() end,
     } or nil,
+    povUnavailable = opts.povUnavailable,
     getMods = function() return env.mods end,
     fileExists = function() return false end,
   })
@@ -679,6 +680,21 @@ t.describe('server: point of view video', function()
     end
     t.assertTrue(offered(setup({ pov = true })))
     t.assertFalse(offered(setup()))
+  end)
+  t.it('tells the phone why the game cannot do it', function()
+    local function session(env)
+      connect(env)
+      env.server.onInputBindingsChanged({ ['vinput' .. env.server.clients.get('10.0.0.2').deviceInst] = 0 })
+      for _, s in ipairs(env.transport.sent) do
+        if s.payload:find('"type":"session"', 1, true) then return s.payload end
+      end
+    end
+    local env = setup({ povUnavailable = 'platform' })
+    t.assertContains(session(env), '"povUnavailable":"platform"')
+    local warned = false
+    for _, line in ipairs(env.logLines) do if tostring(line):find('Proton', 1, true) then warned = true end end
+    t.assertTrue(warned)
+    t.assertFalse(session(setup({ pov = true, povUnavailable = 'platform' })):find('povUnavailable', 1, true) ~= nil)
   end)
   t.it('changes quality, and the camera buttons change the camera of the video', function()
     local env = setup({ pov = true })

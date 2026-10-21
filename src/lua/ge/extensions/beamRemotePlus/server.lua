@@ -70,6 +70,8 @@ deps:
                               outputStatus, update, cycleCamera, look, recenter,
                               setFree, fly, frame }: the
                               game's hidden views for the point of view video (pov.lua)
+  povUnavailable              optional, why there is no povViews (pov.UNAVAILABLE_*),
+                              told to the phones in the session
   runVehicleAction(vehicle, name, value)  optional, runs one of them -> ok, err
 ]]
 function M.new(deps)
@@ -288,6 +290,11 @@ function M.new(deps)
     end
     listening = true
     log.info('[' .. M.VERSION .. '] listening on UDP ' .. protocol.HOST_PORT)
+    if not pov and deps.povUnavailable then
+      log.warn('point of view video unavailable (' .. deps.povUnavailable .. ')'
+        .. (deps.povUnavailable == povModule.UNAVAILABLE_PLATFORM
+          and ': this build of the game has no video streaming, run the Windows build (on Linux, through Proton)' or ''))
+    end
     publish()
     return true
   end
@@ -415,6 +422,7 @@ function M.new(deps)
       modVersion = M.VERSION, player = client.player, commands = commands.names(),
       playerColor = client.sentColor,
       optionalMods = optionalMods.states(),
+      povUnavailable = not pov and deps.povUnavailable or nil,
     }))
   end
 
