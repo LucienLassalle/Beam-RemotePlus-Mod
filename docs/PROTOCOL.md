@@ -239,6 +239,13 @@ manager) or `missing`. Ids: `tyreThermals` (Tyre Thermals and Wear by Luuk,
 or its continuation Tyre Wear and Thermals Redux), `f4` (Carbonworks F4),
 `cf26`, `fr17`. Unknown ids must be ignored.
 
+`povUnavailable` (not sent by older mods, nor when the game can do it):
+why the game cannot do the point of view video (section 6), so the app can
+say so instead of hiding it: `game_version` (older than 0.40) or
+`platform` (a build of the game without video streaming: the native Linux
+build has none, only the Windows build has it, on Linux through Proton).
+Unknown values must be shown as unavailable.
+
 `playerColor` (not sent by older mods, nor to a second screen or an
 unassigned phone): `#rrggbb` colour the game gives the player, the one of
 its name tag above the car in local multiplayer.
@@ -336,8 +343,11 @@ encoder). The video never runs faster than the game.
   library's default the game waits for every encode (60 fps fell to 27).
 - No encoder, no video: the encoder is NVENC (Nvidia), AMF (AMD) or
   QuickSync (Intel) with the DirectX 11/12 renderer, Vulkan video with the
-  Vulkan renderer (on Linux, a Mesa build with H.264 encoding, such as
-  Fedora's `mesa-vulkan-drivers-freeworld`). When it does not start, the
+  Vulkan renderer (on Linux, the Windows build of the game through Proton,
+  with a Mesa build with H.264 encoding, such as Fedora's
+  `mesa-vulkan-drivers-freeworld`). The native Linux build of the game has
+  no video streaming at all (no libbngvs, checked on 0.40.1): `pov` is not
+  offered and the session says `"povUnavailable":"platform"`. When it does not start, the
   phone gets `{"type":"pov","state":"error","error":"encoder"}` and the
   game log has the reason (`videoStream` lines).
 - While the phone has the video, `cam_next` / `cam_prev` cycle the cameras

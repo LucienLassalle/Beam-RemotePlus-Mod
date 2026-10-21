@@ -33,7 +33,10 @@ longer maintained.
   60 frames per second. Measured 60 → 58 fps in game at 720p 60 (BeamNG.drive
   0.40, 1440p). It needs the video encoder of the graphics card: NVENC, AMF
   or QuickSync with DirectX 11/12, Vulkan video with Vulkan (on Linux, a Mesa
-  build with H.264 encoding); without it the phone says so.
+  build with H.264 encoding); without it the phone says so. Only the Windows
+  build of the game streams video: on Linux, run it through Proton (Steam >
+  BeamNG.drive > Properties > Compatibility), the native Linux build has no
+  video streaming.
 - Vehicle functions from the phone: horn, lights, indicators, hazards,
   parking brake, ignition, drive mode, gearbox mode, cruise control, gears,
   recovery, vehicle and camera switching, and on police cars, ambulances,

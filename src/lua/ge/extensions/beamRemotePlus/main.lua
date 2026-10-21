@@ -195,10 +195,16 @@ local function povCamera(view)
 end
 
 -- Render views driven by camera contexts and the video streaming both
--- arrived with 0.40.
-local function povAvailable()
-  return RenderViewManagerInstance ~= nil and core_camera ~= nil and core_camera.createContext ~= nil
-    and type(startNetworkOutput) == 'function'
+-- arrived with 0.40, but the native Linux build of the game ships no video
+-- streaming (libbngvs is in Bin64 only, startNetworkOutput is missing from
+-- BinLinux, checked on 0.40.1): only the Windows build has it, on Linux
+-- through Proton. Returns nil when the game can do it, else why not.
+local function povUnavailable()
+  if not (RenderViewManagerInstance ~= nil and core_camera ~= nil and core_camera.createContext ~= nil) then
+    return povModule.UNAVAILABLE_GAME
+  end
+  if type(startNetworkOutput) ~= 'function' then return povModule.UNAVAILABLE_PLATFORM end
+  return nil
 end
 
 local povViews = {
@@ -342,7 +348,8 @@ local function createServer()
     cycleCamera = cycleCamera,
     listVehicleActions = listVehicleActions,
     runVehicleAction = runVehicleAction,
-    povViews = povAvailable() and povViews or nil,
+    povViews = not povUnavailable() and povViews or nil,
+    povUnavailable = povUnavailable(),
     onDeviceCreated = function()
       if core_input_bindings and core_input_bindings.onDeviceChanged then core_input_bindings.onDeviceChanged() end
     end,
