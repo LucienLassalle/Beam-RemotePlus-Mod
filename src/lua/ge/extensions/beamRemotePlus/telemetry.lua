@@ -9,6 +9,7 @@
 
 local protocol = require('/lua/ge/extensions/beamRemotePlus/protocol')
 local radar = require('/lua/ge/extensions/beamRemotePlus/radar')
+local json = require('/lua/ge/extensions/beamRemotePlus/json')
 
 local M = {}
 
@@ -29,19 +30,75 @@ M.VEHICLE_REQUEST = M.vehicleRequest(M.LOAD_STAMP)
 
 M.RADAR_INTERVAL_MS = 100
 
--- Builds the datagram for one client according to its negotiated protocol.
-function M.encodeFor(client, t, targets)
-  if client.version >= 2 then
-    local msg = {}
-    for k, v in pairs(t) do msg[k] = v end
-    msg.player = client.player
-    msg.vehicle = client.vehicleModel
-    msg.radar = targets
-    return protocol.buildTelemetryMessage(msg)
-  end
-  return protocol.encodeLegacyTelemetry(t)
+-- Delta frames. A snapshot is mostly what does not change from one frame to
+-- the next (the vehicle's limits and equipment, nominal pressures, the
+-- radar computed at 10 Hz...), and a busy one does not fit in one Wi-Fi
+-- packet: an app announcing protocol.FEATURE_DELTA gets, between full
+-- frames, only the fields that changed since the previous frame
+-- ("delta": true; a field gone is sent as null). A full frame every
+-- FULL_FRAME_MS makes up for a lost one. Other apps keep getting full
+-- frames.
+M.FULL_FRAME_MS = 1000
+
+-- Paced by the vehicle side and kept by the app until the next one: sent
+-- when present, never compared nor cleared.
+local UNTRACKED = { skeletonDamage = true }
+
+-- Every field of a snapshot (and its radar) encoded once, for all the
+-- phones following that vehicle: { [key] = json text }.
+function M.encodeFields(t, targets)
+  local fields = {}
+  for k, v in pairs(t) do fields[tostring(k)] = json.encode(v) end
+  if targets then fields.radar = json.encode(targets) end
+  return fields
 end
 
+-- JSON object of encoded fields, keys sorted like json.encode does.
+local function object(fields)
+  local keys = {}
+  for k in pairs(fields) do keys[#keys + 1] = k end
+  table.sort(keys)
+  local parts = {}
+  for i, k in ipairs(keys) do parts[i] = json.encode(k) .. ':' .. fields[k] end
+  return '{' .. table.concat(parts, ',') .. '}'
+end
+
+-- The fields a delta frame carries: its type (every v2 message has one),
+-- what changed since `sent`, null for what is gone.
+local function changes(fields, sent)
+  local out = { delta = 'true', type = fields.type }
+  for k, v in pairs(fields) do
+    if UNTRACKED[k] or sent[k] ~= v then out[k] = v end
+  end
+  for k in pairs(sent) do
+    if fields[k] == nil then out[k] = 'null' end
+  end
+  return out
+end
+
+-- Builds the datagram for one client according to its negotiated protocol
+-- and features. fields: encodeFields() of the snapshot t; now: ms.
+function M.encodeFor(client, t, fields, now)
+  if client.version < 2 then return protocol.encodeLegacyTelemetry(t) end
+  local mine = { type = json.encode('telemetry') }
+  for k, v in pairs(fields) do mine[k] = v end
+  if client.player ~= nil then mine.player = json.encode(client.player) end
+  if client.vehicleModel ~= nil then mine.vehicle = json.encode(client.vehicleModel) end
+  if not (client.features and client.features[protocol.FEATURE_DELTA]) then return object(mine) end
+
+  local sent = client.telemetrySent
+  local full = sent == nil or now - client.telemetryFullAt >= M.FULL_FRAME_MS
+  local state = {}
+  for k, v in pairs(mine) do
+    if not UNTRACKED[k] then state[k] = v end
+  end
+  client.telemetrySent = state
+  if full then
+    client.telemetryFullAt = now
+    return object(mine)
+  end
+  return object(changes(mine, sent))
+end
 --[[
 deps:
   getVehicle(player) -> vehicle object or nil
@@ -102,11 +159,12 @@ function M.new(deps)
 
   function self.dispatch(registry, vehicleId, t)
     if type(t) ~= 'table' then return 0 end
-    local targets = radarFor(vehicleId)
+    local fields = M.encodeFields(t, radarFor(vehicleId))
+    local now = deps.clock()
     local sent = 0
     registry.each(function(_, client)
       if client.vehicleId == vehicleId then
-        deps.send(client, M.encodeFor(client, t, targets))
+        deps.send(client, M.encodeFor(client, t, fields, now))
         sent = sent + 1
       end
     end)

@@ -37,7 +37,7 @@ readable by apps that only look for it after `#`.
 ## 2. Pairing (ping / pong)
 
 ```
-phone → PC:4446   beamremoteplus|ping|<code>|<version>|<device name>[|<role>[|<app version>]]
+phone → PC:4446   beamremoteplus|ping|<code>|<version>|<device name>[|<role>[|<app version>[|<features>]]]
 PC    → phone     beamremoteplus|pong|<code>|<negotiated version>
 ```
 
@@ -54,6 +54,9 @@ PC    → phone     beamremoteplus|pong|<code>|<negotiated version>
   (`0.0.5`, `0.0.5-0.39`, the version given to the build).
   The mod compares it with its own version to tell which side needs an
   update. Older apps do not send it.
+- `<features>` (optional, after the app version, which may be empty):
+  comma-separated features the app understands. `delta`: telemetry delta
+  frames (section 5). Older apps send none, older mods ignore them.
 - The phone pings every 500 ms until it receives the pong, then every 2 s:
   if the mod restarted and forgot the phone, the ping re-creates the session. Once paired, any
   packet (the 60 Hz control packets) keeps the session alive; a phone silent
@@ -138,6 +141,14 @@ fields must be ignored** (forward compatibility).
 
 **`telemetry`** (~30 Hz). A field is **omitted** when the vehicle does not
 provide it (show "n/a", do not assume 0).
+
+**Delta frames.** An app announcing the `delta` feature gets a full frame,
+then frames with `"delta": true` (and their `type`) that carry only the
+fields that changed since the previous frame (`null` = the field is gone), and a full frame
+again every second (in case a delta was lost). Apply a delta to the last
+frame; a delta arriving before any full frame is dropped. `skeletonDamage`
+comes as in full frames (see its row) and is never sent as `null`: keep the
+last one. Other apps always get full frames.
 
 | Field | Unit / type |
 |---|---|
