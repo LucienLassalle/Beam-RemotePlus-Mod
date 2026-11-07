@@ -117,7 +117,7 @@ function M.isCmdMessage(data)
   return startsWith(data, M.CMD_PREFIX)
 end
 
-function M.buildPingMessage(code, version, deviceName, role, appVersion, features)
+function M.buildPingMessage(code, version, deviceName, role, appVersion, features, session)
   local msg = M.PING_PREFIX .. tostring(code)
   if version then
     msg = msg .. '|' .. tostring(version)
@@ -125,8 +125,9 @@ function M.buildPingMessage(code, version, deviceName, role, appVersion, feature
       msg = msg .. '|' .. tostring(deviceName):gsub('|', ' ')
       if role then
         msg = msg .. '|' .. role
-        if appVersion or features then msg = msg .. '|' .. tostring(appVersion or ''):gsub('|', ' ') end
-        if features then msg = msg .. '|' .. table.concat(features, ',') end
+        if appVersion or features or session then msg = msg .. '|' .. tostring(appVersion or ''):gsub('|', ' ') end
+        if features or session then msg = msg .. '|' .. table.concat(features or {}, ',') end
+        if session then msg = msg .. '|' .. session end
       end
     end
   end
@@ -140,12 +141,14 @@ M.ROLE_DISPLAY = 'display' -- second screen: telemetry only, no inputs
 -- delta: telemetry frames carrying only what changed (see telemetry.lua).
 M.FEATURE_DELTA = 'delta'
 
--- Returns { code, version, deviceName, role, appVersion, features, prefix }
--- or nil.
+-- Returns { code, version, deviceName, role, appVersion, features, session,
+-- prefix } or nil.
 -- Apps speaking protocol 1 only send the code, so a missing version means 1;
 -- older apps do not send their own version (appVersion nil).
 -- features: set of the features the app announces (empty for older apps).
--- ping: beamremoteplus|ping|<code>[|<version>[|<device>[|<role>[|<app version>[|<features>]]]]]
+-- session: random id of the app's connection, the same from another address
+-- (nil for older apps).
+-- ping: beamremoteplus|ping|<code>[|<version>[|<device>[|<role>[|<app version>[|<features>[|<session>]]]]]]
 function M.parsePing(data)
   local prefix = pingPrefix(data)
   if not prefix then return nil end
@@ -160,8 +163,10 @@ function M.parsePing(data)
   if appVersion == '' then appVersion = nil end
   local features = {}
   for feature in (fields[6] or ''):gmatch('[^,]+') do features[feature] = true end
+  local session = fields[7]
+  if session == '' then session = nil end
   return { code = code, version = version, deviceName = deviceName, role = role, appVersion = appVersion,
-    features = features, prefix = prefix }
+    features = features, session = session, prefix = prefix }
 end
 
 function M.pingMatchesCode(data, code)
