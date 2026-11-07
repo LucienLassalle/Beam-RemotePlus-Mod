@@ -37,7 +37,7 @@ readable by apps that only look for it after `#`.
 ## 2. Pairing (ping / pong)
 
 ```
-phone → PC:4446   beamremoteplus|ping|<code>|<version>|<device name>[|<role>[|<app version>[|<features>]]]
+phone → PC:4446   beamremoteplus|ping|<code>|<version>|<device name>[|<role>[|<app version>[|<features>[|<session>]]]]
 PC    → phone     beamremoteplus|pong|<code>|<negotiated version>
 ```
 
@@ -57,6 +57,12 @@ PC    → phone     beamremoteplus|pong|<code>|<negotiated version>
 - `<features>` (optional, after the app version, which may be empty):
   comma-separated features the app understands. `delta`: telemetry delta
   frames (section 5). Older apps send none, older mods ignore them.
+- `<session>` (optional, after the features, which may be empty): random id
+  of the app's connection. A ping with the session of a connected phone but
+  from another address (new IP after a Wi-Fi cut) moves that phone there: it
+  keeps its virtual device and player, even while new phones are locked out,
+  and gets a session message (ask for the video again). Older apps send
+  none: a new address is then a new phone.
 - The phone pings every 500 ms until it receives the pong, then every 2 s:
   if the mod restarted and forgot the phone, the ping re-creates the session. Once paired, any
   packet (the 60 Hz control packets) keeps the session alive; a phone silent
