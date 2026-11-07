@@ -47,8 +47,33 @@ function M.new(input, clock, vehicle)
     for _, entry in ipairs(snapshot) do fn(entry[1], entry[2]) end
   end
 
-  -- Returns client, isNew, errorReason.
+  -- The phone of that connection (protocol.parsePing session), at another
+  -- address, in the same role; nil when unknown.
+  function self.bySession(ping, ip)
+    if not ping.session then return nil end
+    local display = ping.role == protocol.ROLE_DISPLAY
+    for otherIp, client in pairs(clients) do
+      if otherIp ~= ip and client.session == ping.session and (client.display == true) == display and not client.leaving then
+        return client
+      end
+    end
+    return nil
+  end
+
+  -- Returns client, isNew, errorReason, movedFrom. A phone back from another
+  -- address with the same session (new IP after a Wi-Fi cut) keeps its
+  -- device and player: movedFrom is its old address.
   function self.connect(ip, ping)
+    local moved = not clients[ip] and self.bySession(ping, ip)
+    if moved then
+      local from = moved.ip
+      clients[from] = nil
+      moved.ip = ip
+      moved.lastSeen = clock()
+      moved.telemetrySent = nil -- the app starts the new session from a full frame
+      clients[ip] = moved
+      return moved, false, nil, from
+    end
     local client = clients[ip]
     -- Same phone switching between controller and second-screen roles:
     -- start a fresh session with the new role.
@@ -67,7 +92,7 @@ function M.new(input, clock, vehicle)
     if ping.role == protocol.ROLE_DISPLAY then
       client = {
         ip = ip, deviceName = ping.deviceName or ip, version = protocol.negotiateVersion(ping.version),
-        appVersion = ping.appVersion, features = ping.features or {},
+        appVersion = ping.appVersion, features = ping.features or {}, session = ping.session,
         display = true, state = { 0.5, 0, 0 }, holds = {}, player = 0, debug = false, lastSeen = clock(),
       }
       clients[ip] = client
@@ -86,6 +111,7 @@ function M.new(input, clock, vehicle)
       version = protocol.negotiateVersion(ping.version),
       appVersion = ping.appVersion, -- nil for older apps
       features = ping.features or {}, -- what the app understands (protocol.FEATURE_*)
+      session = ping.session, -- id of the app's connection (see bySession)
       state = { 0.5, 0, 0 },
       holds = {},       -- active "hold" commands (horn...) to release on disconnect
       player = nil,     -- assigned by BeamNG (see assignPlayers)

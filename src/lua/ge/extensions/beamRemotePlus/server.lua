@@ -385,23 +385,43 @@ function M.new(deps)
     end
   end
 
+  local function sendSession(client)
+    if client.version < 2 then return end
+    client.sentColor = colorOf(client)
+    send(client, protocol.buildSessionMessage({
+      modVersion = M.VERSION, player = client.player, commands = commands.names(),
+      playerColor = client.sentColor,
+      optionalMods = optionalMods.states(),
+      povUnavailable = not pov and deps.povUnavailable or nil,
+    }))
+  end
+
   local function handlePing(ip, data)
     local code = deps.getSecurityCode()
     if not protocol.pingMatchesCode(data, code) then
       log.warn('ping from ' .. ip .. ' rejected (wrong or unavailable pairing code)')
       return
     end
-    if locked and not clients.get(ip) then
+    local ping = protocol.parsePing(data)
+    -- A connected phone back from another address is not a new phone.
+    if locked and not clients.get(ip) and not clients.bySession(ping, ip) then
       log.throttled('locked:' .. ip, 5000, 'I', 'ping from ' .. ip .. ' ignored: new phones are locked out')
       return
     end
-    local ping = protocol.parsePing(data)
-    local client, isNew, err = clients.connect(ip, ping)
+    local client, isNew, err, movedFrom = clients.connect(ip, ping)
     if not client then
       log.error('cannot connect ' .. ip .. ': ' .. tostring(err))
       return
     end
     deps.transport.send(protocol.buildPongMessage(code, client.version, ping.prefix), ip, protocol.CLIENT_PORT)
+    if movedFrom then
+      -- Same device, same player. The video went to the old address: the
+      -- session message makes the app ask for it again.
+      if pov then pov.stop(movedFrom) end
+      log.info('phone back from another address: ' .. client.deviceName .. ' (' .. movedFrom .. ' -> ' .. ip .. ')')
+      sendSession(client)
+      publish()
+    end
     if isNew then
       forget(ip)
       -- BeamNG does not notice virtual devices on its own: without a rescan
@@ -413,17 +433,6 @@ function M.new(deps)
         { device = client.deviceName, player = (client.player or 0) + 1 }), 'success')
       publish()
     end
-  end
-
-  local function sendSession(client)
-    if client.version < 2 then return end
-    client.sentColor = colorOf(client)
-    send(client, protocol.buildSessionMessage({
-      modVersion = M.VERSION, player = client.player, commands = commands.names(),
-      playerColor = client.sentColor,
-      optionalMods = optionalMods.states(),
-      povUnavailable = not pov and deps.povUnavailable or nil,
-    }))
   end
 
   local function handleCommand(client, data)
