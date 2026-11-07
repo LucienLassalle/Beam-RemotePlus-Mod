@@ -31,6 +31,8 @@ Thanks for helping! Issues and pull requests are welcome in **English or French*
 | `.../commands.lua` | Command table (horn, lights, cruise control...). |
 | `.../radar.lua` | Cars around the followed vehicle, in its frame. |
 | `.../telemetry.lua` | Requests vehicle snapshots and sends them to phones. |
+| `.../pov.lua` | Point of view video: one hidden view per phone, its state and camera commands. |
+| `.../povViews.lua` | The game side of that video: render views, camera contexts, video streaming. |
 | `src/lua/vehicle/extensions/beamRemotePlus/telemetry.lua` | Runs inside the vehicle, collects the data. |
 | `.../damage.lua`, `tyres.lua` | Damage summary, optional Tyre Thermals and Wear integration. |
 | `.../config.lua`, `i18n.lua`, `logger.lua` | Settings file, translations, logs. |

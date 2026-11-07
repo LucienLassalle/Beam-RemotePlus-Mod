@@ -6,7 +6,7 @@
 
 local MODULE_DIR = '/lua/ge/extensions/beamRemotePlus/'
 local SIBLINGS = { 'json', 'protocol', 'config', 'i18n', 'logger', 'clients',
-  'vehicleActions', 'commands', 'radar', 'telemetry', 'transport', 'nativeRemote', 'version', 'optionalMods', 'pov', 'server' }
+  'vehicleActions', 'commands', 'radar', 'telemetry', 'transport', 'nativeRemote', 'version', 'optionalMods', 'pov', 'povViews', 'server' }
 
 -- require() caches by path independently of extensions.reload(): without
 -- this, reloading the mod would keep running stale sibling modules.
@@ -20,7 +20,7 @@ local nativeRemoteModule = require(MODULE_DIR .. 'nativeRemote')
 local serverModule = require(MODULE_DIR .. 'server')
 local radar = require(MODULE_DIR .. 'radar')
 local vehicleActions = require(MODULE_DIR .. 'vehicleActions')
-local povModule = require(MODULE_DIR .. 'pov')
+local povViewsModule = require(MODULE_DIR .. 'povViews')
 
 local M = {}
 
@@ -136,197 +136,10 @@ local function runVehicleAction(vehicle, name, value)
   return true
 end
 
--- Point of view video (pov.lua) ----------------------------------------------
--- A hidden render view per phone, driven by a camera context of the game
--- (0.40, the split-screen machinery): it follows the car of the phone's
--- player, starting from the driver's seat, never drawn on the PC screen. The
--- context gets an input player of its own (POV_INPUT_PLAYER, counting down),
--- so the player keeps its own camera on the PC, and the phone cycles the
--- cameras of its video through that input player. The game's video
--- streaming (libbngvs, 0.40) encodes the view on the graphics card and sends
--- it to the phone.
-
-local POV_INPUT_PLAYER = 63
-local POV_CAMERA_CHECK_S = 1
--- Time constant of the smooth recentring of a seat camera (95% in 3 of them).
-local POV_RECENTER_S = 0.15
-local povInputs = {} -- input players in use
-
--- Same quality cut as split-screen views (render/splitScreen.lua): mirrors
--- and dynamic reflections are each an extra render.
-local function povQuality(rv)
-  local ok, s = pcall(RenderSettings.getGlobals)
-  if not ok or not s then return end
-  s.meshDetailAdjust = s.meshDetailAdjust * 0.5
-  s.groundCoverScale = s.groundCoverScale * 0.5
-  s.vehicleMirrorsEnabled = false
-  s.vehicleDynamicReflectionsEnabled = false
-  rv.settingsOverride = s
-  rv.settingsOverrideEnabled = true
-end
-
--- The PC's anti-aliasing / upscaler and exposure, like split-screen views:
--- without them edges, wires and foliage shimmer (a grainy picture), and a
--- new view starts at the default exposure and blows out until it adapts.
-local function povLikeMainView(rv)
-  local main = RenderViewManagerInstance:getView('main')
-  if not main then return end
-  rv.upscaleMode = main.upscaleMode
-  rv.upscaleRenderScale = main.upscaleRenderScale
-  rv.upscaleSharpness = main.upscaleSharpness
-  rv.currentExposure = main.currentExposure
-end
-
--- Seat cameras: the car's own dashboard is in view (not from the hood).
-local function isInsideCamera(name)
-  return name == 'driver' or (name ~= nil and name:find('^occupant%.') ~= nil)
-end
-
-local function povCameraName(view)
-  local state = core_camera.getContextCameraState(view.id)
-  return state and state.cam
-end
-
--- The camera object of the view (its own instance, not the PC's).
-local function povCamera(view)
-  local cams = view.vid and core_camera.getCameraDataById(view.vid, view.id)
-  local name = cams and povCameraName(view)
-  return name and cams[name]
-end
-
--- Render views driven by camera contexts and the video streaming both
--- arrived with 0.40, but the native Linux build of the game ships no video
--- streaming (libbngvs is in Bin64 only, startNetworkOutput is missing from
--- BinLinux, checked on 0.40.1): only the Windows build has it, on Linux
--- through Proton. Returns nil when the game can do it, else why not.
-local function povUnavailable()
-  if not (RenderViewManagerInstance ~= nil and core_camera ~= nil and core_camera.createContext ~= nil) then
-    return povModule.UNAVAILABLE_GAME
-  end
-  if type(startNetworkOutput) ~= 'function' then return povModule.UNAVAILABLE_PLATFORM end
-  return nil
-end
-
-local povViews = {
-  createView = function(id, player, width, height)
-    local input = POV_INPUT_PLAYER
-    while povInputs[input] do input = input - 1 end
-    local rv = RenderViewManagerInstance:getOrCreateView(id)
-    rv.luaOwned = true
-    rv.renderEditorIcons = false
-    rv.namedTexTargetColor = id
-    rv.resolution = Point2I(width, height)
-    rv.viewPort = RectI(0, 0, width, height)
-    rv.compositeRect = RectI(-2, -2, 2, 2) -- off the window: never composited on screen
-    rv.frustum = Frustum.construct(false, math.rad(70), width / height, 0.1, 2000)
-    povQuality(rv)
-    povLikeMainView(rv)
-    core_camera.createContext(id, id, input, player)
-    povInputs[input] = true
-    return { id = id, rv = rv, input = input, player = player, checkAt = 0 }
-  end,
-  destroyView = function(view)
-    core_camera.destroyContext(view.id)
-    RenderViewManagerInstance:destroyView(view.rv)
-    povInputs[view.input] = nil
-  end,
-  startOutput = function(view, url, quality, bitrate)
-    local q = povModule.QUALITIES[quality]
-    -- source, url, container, fps, bitrate, with audio (0 = no), encoder options
-    local id = startNetworkOutput(view.id, url, 'mpegts', q.fps, bitrate, 0, povModule.encoderOptions(quality))
-    if not id then return nil, 'no_output' end
-    return id
-  end,
-  stopOutput = function(output)
-    stopNetworkOutput(output)
-  end,
-  outputStatus = function(output)
-    return getNetworkOutputStatus(output)
-  end,
-  update = function(view)
-    -- The context starts on the car's default camera, and gets it back when
-    -- the car changes: the camera of the video (the driver's seat of each
-    -- new car) is selected again.
-    local now = os.clockhp()
-    if now >= view.checkAt then
-      view.checkAt = now + POV_CAMERA_CHECK_S
-      local veh = getPlayerVehicle(view.player)
-      local vid = veh and veh:getID()
-      if vid ~= view.vid then
-        view.vid = vid
-        view.camera = vid and core_camera.getDriverCameraNameById(vid)
-      end
-      local current = view.camera and povCameraName(view)
-      if not view.free and current and current ~= view.camera then core_camera.setContextCamera(view.id, view.camera) end
-    end
-    return not view.free and isInsideCamera(view.camera)
-  end,
-  -- Like the game's mouse look (core/input/actions/camera.json), through the
-  -- view's own input player: the PC's camera does not move.
-  look = function(view, dx, dy)
-    view.recentering = nil
-    core_camera.rotate_yaw_relative(dx, view.input)
-    core_camera.rotate_pitch_relative(-dy, view.input)
-  end,
-  -- The game resets no camera of a hidden view (core_camera.resetCamera
-  -- looks for a car of the view's input player, which has none), and a new
-  -- context would reset the PC's cameras too (destroyContext clears the
-  -- main view's camera cache). So the view's own camera, from
-  -- getCameraDataById, is turned back: smoothly for a seat camera (frame),
-  -- with its own reset for the others.
-  recenter = function(view)
-    local cam = povCamera(view)
-    if not cam then return end
-    if cam.relativeYaw then
-      view.recentering = cam
-    elseif cam.reset then
-      cam:reset()
-    end
-  end,
-  frame = function(view)
-    local now = os.clockhp()
-    local dt = math.min(now - (view.frameAt or now), 0.1)
-    view.frameAt = now
-    local cam = view.recentering
-    if not cam then return end
-    if cam ~= povCamera(view) then view.recentering = nil return end
-    local keep = math.exp(-dt / POV_RECENTER_S)
-    cam.relativeYaw, cam.relativePitch = cam.relativeYaw * keep, (cam.relativePitch or 0) * keep
-    if math.abs(cam.relativeYaw) + math.abs(cam.relativePitch) < 0.002 then
-      cam.relativeYaw, cam.relativePitch = 0, 0
-      view.recentering = nil
-    end
-  end,
-  -- The game's free camera of the view, starting where the view looks, or
-  -- back to the camera it left.
-  setFree = function(view, on)
-    view.free = on
-    view.recentering = nil
-    core_camera.setContextCamera(view.id, on and 'free' or view.camera)
-    return true
-  end,
-  fly = function(view, value)
-    core_camera.moveforward(math.max(value, 0), view.input)
-    core_camera.movebackward(math.max(-value, 0), view.input)
-  end,
-  cycleCamera = function(view, offset)
-    local current = povCameraName(view)
-    core_camera.setVehicleCameraByIndexOffset(view.input, offset)
-    local order = {}
-    for _, config in ipairs(core_camera.getConfigurationReadOnly()) do
-      if config.enabled or config.name == 'driver' or config.name:find('^occupant%.') then order[#order + 1] = config.name end
-    end
-    local seat = view.vid and core_camera.getDriverCameraNameById(view.vid)
-    local camera = povModule.cycleWithSeat(order, current, povCameraName(view), seat, offset)
-    if camera and camera ~= povCameraName(view) then core_camera.setContextCamera(view.id, camera) end
-    view.camera = camera or view.camera
-    return true
-  end,
-}
-
 local function createServer()
   local config = configModule.new({ readJson = jsonReadFile, writeJson = jsonWriteFile })
   config.load()
+  local povUnavailable = povViewsModule.unavailable(_G)
   return serverModule.new({
     transport = transportModule.new(socket),
     input = extensions.core_input_virtualInput,
@@ -348,8 +161,8 @@ local function createServer()
     cycleCamera = cycleCamera,
     listVehicleActions = listVehicleActions,
     runVehicleAction = runVehicleAction,
-    povViews = not povUnavailable() and povViews or nil,
-    povUnavailable = povUnavailable(),
+    povViews = not povUnavailable and povViewsModule.new(_G) or nil,
+    povUnavailable = povUnavailable,
     onDeviceCreated = function()
       if core_input_bindings and core_input_bindings.onDeviceChanged then core_input_bindings.onDeviceChanged() end
     end,
