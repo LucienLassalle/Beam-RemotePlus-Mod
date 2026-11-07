@@ -117,7 +117,7 @@ function M.isCmdMessage(data)
   return startsWith(data, M.CMD_PREFIX)
 end
 
-function M.buildPingMessage(code, version, deviceName, role, appVersion)
+function M.buildPingMessage(code, version, deviceName, role, appVersion, features)
   local msg = M.PING_PREFIX .. tostring(code)
   if version then
     msg = msg .. '|' .. tostring(version)
@@ -125,7 +125,8 @@ function M.buildPingMessage(code, version, deviceName, role, appVersion)
       msg = msg .. '|' .. tostring(deviceName):gsub('|', ' ')
       if role then
         msg = msg .. '|' .. role
-        if appVersion then msg = msg .. '|' .. tostring(appVersion):gsub('|', ' ') end
+        if appVersion or features then msg = msg .. '|' .. tostring(appVersion or ''):gsub('|', ' ') end
+        if features then msg = msg .. '|' .. table.concat(features, ',') end
       end
     end
   end
@@ -135,10 +136,16 @@ end
 M.ROLE_CONTROLLER = 'controller'
 M.ROLE_DISPLAY = 'display' -- second screen: telemetry only, no inputs
 
--- Returns { code, version, deviceName, role, appVersion, prefix } or nil.
+-- What an app announces it understands, after its version in the ping.
+-- delta: telemetry frames carrying only what changed (see telemetry.lua).
+M.FEATURE_DELTA = 'delta'
+
+-- Returns { code, version, deviceName, role, appVersion, features, prefix }
+-- or nil.
 -- Apps speaking protocol 1 only send the code, so a missing version means 1;
 -- older apps do not send their own version (appVersion nil).
--- ping: beamremoteplus|ping|<code>[|<version>[|<device>[|<role>[|<app version>]]]]
+-- features: set of the features the app announces (empty for older apps).
+-- ping: beamremoteplus|ping|<code>[|<version>[|<device>[|<role>[|<app version>[|<features>]]]]]
 function M.parsePing(data)
   local prefix = pingPrefix(data)
   if not prefix then return nil end
@@ -151,7 +158,10 @@ function M.parsePing(data)
   local role = fields[4] == M.ROLE_DISPLAY and M.ROLE_DISPLAY or M.ROLE_CONTROLLER
   local appVersion = fields[5]
   if appVersion == '' then appVersion = nil end
-  return { code = code, version = version, deviceName = deviceName, role = role, appVersion = appVersion, prefix = prefix }
+  local features = {}
+  for feature in (fields[6] or ''):gmatch('[^,]+') do features[feature] = true end
+  return { code = code, version = version, deviceName = deviceName, role = role, appVersion = appVersion,
+    features = features, prefix = prefix }
 end
 
 function M.pingMatchesCode(data, code)
