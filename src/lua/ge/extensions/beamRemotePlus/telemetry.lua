@@ -63,10 +63,10 @@ local function object(fields)
   return '{' .. table.concat(parts, ',') .. '}'
 end
 
--- The fields a delta frame carries: what changed since `sent`, null for
--- what is gone.
+-- The fields a delta frame carries: its type (every v2 message has one),
+-- what changed since `sent`, null for what is gone.
 local function changes(fields, sent)
-  local out = { delta = 'true' }
+  local out = { delta = 'true', type = fields.type }
   for k, v in pairs(fields) do
     if UNTRACKED[k] or sent[k] ~= v then out[k] = v end
   end

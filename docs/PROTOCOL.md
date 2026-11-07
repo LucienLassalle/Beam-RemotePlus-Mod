@@ -143,8 +143,8 @@ fields must be ignored** (forward compatibility).
 provide it (show "n/a", do not assume 0).
 
 **Delta frames.** An app announcing the `delta` feature gets a full frame,
-then frames with `"delta": true` that carry only the fields that changed
-since the previous frame (`null` = the field is gone), and a full frame
+then frames with `"delta": true` (and their `type`) that carry only the
+fields that changed since the previous frame (`null` = the field is gone), and a full frame
 again every second (in case a delta was lost). Apply a delta to the last
 frame; a delta arriving before any full frame is dropped. `skeletonDamage`
 comes as in full frames (see its row) and is never sent as `null`: keep the
